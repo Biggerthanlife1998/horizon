@@ -12,13 +12,13 @@ services:
       - key: PORT
         value: 10000
       - key: MONGODB_URI
-        fromDatabase:
-          name: horizon-bank-db
-          property: connectionString
+        value: mongodb+srv://username:password@cluster.mongodb.net/horizon-bank
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
         value: https://horizon-bank-frontend.onrender.com
+      - key: ADMIN_PASSWORD
+        value: admin123
 
   # Frontend Service
   - type: web
@@ -29,11 +29,3 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://horizon-bank-api.onrender.com
-
-  # Database
-  - type: pserv
-    name: horizon-bank-db
-    env: mongodb
-    plan: free
-    region: oregon
-    ipAllowList: []
