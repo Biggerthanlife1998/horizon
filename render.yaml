@@ -26,9 +26,6 @@ services:
     env: docker
     dockerfilePath: ./client/Dockerfile
     dockerContext: ./client
-    dockerBuildArgs:
-      - key: VITE_API_URL
-        value: https://horizon-bank-api.onrender.com
     envVars:
       - key: VITE_API_URL
         value: https://horizon-bank-api.onrender.com
