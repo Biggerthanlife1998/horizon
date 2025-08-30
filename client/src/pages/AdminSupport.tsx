@@ -436,7 +436,7 @@ export default function AdminSupport() {
           data={filteredTickets}
           columns={tableColumns}
           itemsPerPage={15}
-          searchable={false}
+
         />
       </div>
 

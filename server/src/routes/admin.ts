@@ -165,7 +165,7 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     if (includeTransactionHistory === 'true') {
       try {
         console.log('Starting transaction generation for user:', user.username);
-        console.log('User ID:', user._id.toString());
+        console.log('User ID:', (user._id as any).toString());
         console.log('Total Balance:', account.totalBalance);
         console.log('Credit Limit:', creditLimit);
         console.log('Transaction Rules:', transactionRules);
@@ -194,8 +194,8 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
         console.log(`Successfully saved ${transactionCount} transactions for user ${user.username}`);
       } catch (error) {
         console.error('Failed to generate transaction history:', error);
-        console.error('Error details:', error.message);
-        console.error('Stack trace:', error.stack);
+        console.error('Error details:', (error as any).message);
+        console.error('Stack trace:', (error as any).stack);
         // Don't fail the user creation if transaction generation fails
       }
     }
@@ -401,7 +401,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const accounts = await Account.find({});
 
     const usersWithAccounts = users.map(user => {
-      const account = accounts.find(acc => acc.userId.toString() === user._id.toString());
+      const account = accounts.find(acc => acc.userId.toString() === (user._id as any).toString());
       return {
         ...user.toObject(),
         account: account ? {

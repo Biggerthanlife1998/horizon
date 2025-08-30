@@ -38,7 +38,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Generate JWT token
-    const token = generateToken(user._id.toString());
+    const token = generateToken((user._id as any).toString());
 
     // Return user data (without sensitive information)
     const userData = {

@@ -439,8 +439,8 @@ export default function CheckDeposit() {
           data={depositHistory}
           columns={tableColumns}
           itemsPerPage={10}
-          searchable={true}
-          searchPlaceholder="Search deposits..."
+
+
         />
       </div>
 

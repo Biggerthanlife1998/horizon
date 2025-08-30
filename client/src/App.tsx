@@ -14,7 +14,7 @@ import Payments from './pages/Payments';
 import CardServices from './pages/CardServices';
 import Profile from './pages/Profile';
 import Support from './pages/Support';
-import PlaceholderPage from './pages/PlaceholderPage';
+// import PlaceholderPage from './pages/PlaceholderPage';
 
 function App() {
   return (

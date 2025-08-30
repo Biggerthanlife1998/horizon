@@ -304,7 +304,10 @@ export const generateTransactionHistory = (
   }));
 
   // Sort by transaction date (oldest first)
-  return transactionsWithStatus.sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+  return transactionsWithStatus.map(tx => ({
+    ...tx,
+    userId: tx.userId.toString()
+  })).sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
 };
 
 // Helper functions for realistic business names

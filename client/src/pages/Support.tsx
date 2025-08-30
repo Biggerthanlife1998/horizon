@@ -320,8 +320,8 @@ export default function Support() {
           data={tickets}
           columns={tableColumns}
           itemsPerPage={10}
-          searchable={true}
-          searchPlaceholder="Search tickets..."
+
+
         />
       </div>
 

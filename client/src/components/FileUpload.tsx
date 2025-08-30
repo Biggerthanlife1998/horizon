@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Camera } from 'lucide-react';
+import { X, Camera } from 'lucide-react';
 
 interface FileUploadProps {
   label: string;
@@ -20,7 +20,7 @@ export default function FileUpload({
   onChange,
   required = false,
   icon = <Camera className="mx-auto h-12 w-12 text-gray-400" />,
-  placeholder = "Upload a file or drag and drop"
+  // placeholder = "Upload a file or drag and drop"
 }: FileUploadProps) {
   const [dragActive, setDragActive] = useState(false);
 

@@ -325,8 +325,8 @@ export default function Payments() {
             data={paymentHistory}
             columns={tableColumns}
             itemsPerPage={10}
-            searchable={true}
-            searchPlaceholder="Search payments..."
+
+
           />
         )}
       </div>
