@@ -32,3 +32,4 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://horizon-bank-api.onrender.com
+    plan: free

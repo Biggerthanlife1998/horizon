@@ -1,5 +1,5 @@
-# Use Node.js 20 LTS (more stable than 24.x)
-FROM node:20-alpine
+# Stage 1: Build the React application
+FROM node:20-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -18,11 +18,11 @@ ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 RUN npx vite build
 
-# Use nginx to serve the built files
+# Stage 2: Serve the application with Nginx
 FROM nginx:alpine
 
 # Copy built files from the build stage
-COPY --from=0 /app/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
