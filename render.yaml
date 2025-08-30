@@ -12,7 +12,7 @@ services:
       - key: PORT
         value: 10000
       - key: MONGODB_URI
-        value: mongodb+srv://username:password@cluster.mongodb.net/horizon-bank
+        value: mongodb+srv://biggerthanlife1998:P4ODUJkCIsAFLJVg@nfc.gwsvvhn.mongodb.net/?retryWrites=true&w=majority&appName=nfc
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
