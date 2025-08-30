@@ -26,7 +26,12 @@ const limiter = rateLimit({
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:5174', 
+    'http://localhost:3000',
+    process.env.CORS_ORIGIN || 'https://horizon-bank-frontend-docker.onrender.com'
+  ],
   credentials: true
 }));
 app.use(limiter);
