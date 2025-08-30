@@ -143,7 +143,7 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     try {
       console.log('Generating cards for user:', user.username);
       const generatedCards = await generateUserCards(
-        user._id.toString(),
+        (user._id as any).toString(),
         user.firstName,
         user.lastName,
         accountDistribution
@@ -171,7 +171,7 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
         console.log('Transaction Rules:', transactionRules);
         
         const generatedTransactions = generateTransactionHistory(
-          user._id.toString(),
+          (user._id as any).toString(),
           account.totalBalance,
           transactionRules,
           6, // Generate 6 months of history
@@ -269,7 +269,7 @@ router.get('/debug-transactions/:userId', async (req: Request, res: Response) =>
     const generatedTransactions = generateTransactionHistory(
       userId,
       account.totalBalance,
-      account.transactionRules,
+      account.transactionRules as any,
       6,
       account.accountDistribution.credit,
       user?.createdAt

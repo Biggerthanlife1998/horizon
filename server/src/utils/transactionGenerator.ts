@@ -57,7 +57,8 @@ export const generateTransactionHistory = (
       amount: interestAmount,
       description: 'Interest Payment',
       category: 'Interest',
-      transactionDate: interestDate
+      transactionDate: interestDate,
+      status: 'completed'
     });
 
     // Credit card transactions (if credit limit > 0)
@@ -74,7 +75,8 @@ export const generateTransactionHistory = (
           amount: -creditAmount,
           description: getRandomCreditCardTransaction(),
           category: 'Credit Card',
-          transactionDate: creditDate
+          transactionDate: creditDate,
+          status: 'completed'
         });
       }
 
@@ -88,8 +90,9 @@ export const generateTransactionHistory = (
         amount: -paymentAmount,
         description: 'Credit Card Payment',
         category: 'Credit Card Payment',
-        transactionDate: paymentDate
-      });
+              transactionDate: paymentDate,
+      status: 'completed'
+    });
     }
 
     // Grocery transactions (weekly or bi-weekly) - scaled by balance
@@ -108,7 +111,8 @@ export const generateTransactionHistory = (
         amount: -groceryAmount, // Negative for spending
         description: getRandomGroceryStore(),
         category: 'Food & Groceries',
-        transactionDate: groceryDate
+        transactionDate: groceryDate,
+        status: 'completed'
       });
     }
 
@@ -128,7 +132,8 @@ export const generateTransactionHistory = (
         amount: -gasAmount,
         description: getRandomGasStation(),
         category: 'Transportation',
-        transactionDate: gasDate
+        transactionDate: gasDate,
+        status: 'completed'
       });
     }
 
@@ -148,7 +153,8 @@ export const generateTransactionHistory = (
         amount: -restaurantAmount,
         description: getRandomRestaurant(),
         category: 'Dining',
-        transactionDate: restaurantDate
+        transactionDate: restaurantDate,
+        status: 'completed'
       });
     }
 
@@ -168,7 +174,8 @@ export const generateTransactionHistory = (
         amount: -onlineAmount,
         description: getRandomOnlineStore(),
         category: 'Shopping',
-        transactionDate: onlineDate
+        transactionDate: onlineDate,
+        status: 'completed'
       });
     }
 
@@ -186,7 +193,8 @@ export const generateTransactionHistory = (
         amount: -atmAmount,
         description: 'ATM Withdrawal',
         category: 'Cash',
-        transactionDate: atmDate
+        transactionDate: atmDate,
+        status: 'completed'
       });
     }
 
@@ -204,7 +212,8 @@ export const generateTransactionHistory = (
         amount: -donationAmount,
         description: getRandomDonation(),
         category: 'Charity',
-        transactionDate: donationDate
+        transactionDate: donationDate,
+        status: 'completed'
       });
     }
 
@@ -218,7 +227,8 @@ export const generateTransactionHistory = (
         amount: -12.99,
         description: 'Monthly Maintenance Fee',
         category: 'Banking',
-        transactionDate: feeDate
+        transactionDate: feeDate,
+        status: 'completed'
       });
     }
 
@@ -233,7 +243,8 @@ export const generateTransactionHistory = (
       amount: -savingsAmount,
       description: 'Transfer to Savings',
       category: 'Transfer',
-      transactionDate: savingsDate
+      transactionDate: savingsDate,
+      status: 'completed'
     });
 
     // Savings account transactions
@@ -244,7 +255,8 @@ export const generateTransactionHistory = (
       amount: savingsAmount,
       description: 'Transfer from Checking',
       category: 'Transfer',
-      transactionDate: savingsDate
+      transactionDate: savingsDate,
+      status: 'completed'
     });
 
     // Interest earned on savings (monthly) - using a fixed amount for simplicity
@@ -258,7 +270,8 @@ export const generateTransactionHistory = (
       amount: savingsInterestAmount,
       description: 'Interest Earned',
       category: 'Interest',
-      transactionDate: savingsInterestDate
+      transactionDate: savingsInterestDate,
+      status: 'completed'
     });
 
     // Additional checking account transactions (more variety) - scaled by balance
@@ -275,7 +288,8 @@ export const generateTransactionHistory = (
         amount: -additionalAmount,
         description: getRandomCheckingTransaction(),
         category: getRandomCategory(),
-        transactionDate: additionalDate
+        transactionDate: additionalDate,
+        status: 'completed'
       });
     }
 
