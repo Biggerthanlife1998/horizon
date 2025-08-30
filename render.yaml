@@ -16,13 +16,13 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://horizon-bank-frontend.onrender.com
+        value: https://horizon-bank-frontend-docker.onrender.com
       - key: ADMIN_PASSWORD
         value: admin123
 
   # Frontend Service (Docker)
   - type: web
-    name: horizon-bank-frontend
+    name: horizon-bank-frontend-docker
     env: docker
     dockerfilePath: ./client/Dockerfile
     dockerContext: ./client
