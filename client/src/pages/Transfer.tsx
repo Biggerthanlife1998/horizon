@@ -128,12 +128,6 @@ export default function Transfer() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   
-  // Enhanced security state
-  const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
-  const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [pendingTransfer, setPendingTransfer] = useState<any>(null);
-  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
-  const LARGE_TRANSFER_THRESHOLD = 1000; // $1000 threshold for 2FA
   
   // Scheduled transfer confirmation state
   const [showScheduledConfirmation, setShowScheduledConfirmation] = useState(false);
@@ -159,7 +153,7 @@ export default function Transfer() {
       name: 'Instant Transfer',
       description: 'Completed in minutes',
       fee: 0,
-      limit: 2500,
+      limit: 0, // No limit
       estimatedTime: 'Completed in minutes',
       available: true
     },
@@ -168,7 +162,7 @@ export default function Transfer() {
       name: 'Next Business Day',
       description: 'Completed by end of next business day',
       fee: 0,
-      limit: 10000,
+      limit: 0, // No limit
       estimatedTime: 'Completed by end of next business day',
       available: true
     },
@@ -177,7 +171,7 @@ export default function Transfer() {
       name: 'Standard Transfer',
       description: 'Completed in 2-3 business days',
       fee: 0,
-      limit: 50000,
+      limit: 0, // No limit
       estimatedTime: 'Completed in 2-3 business days',
       available: true
     }
@@ -554,20 +548,6 @@ export default function Transfer() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
-  // Generate and send 2FA code (simulated)
-  const generateTwoFactorCode = () => {
-    // In a real app, this would send an SMS or email
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    console.log('2FA Code (for demo):', code);
-    return code;
-  };
-
-  // Verify 2FA code (simulated)
-  const verifyTwoFactorCode = async (code: string) => {
-    // In a real app, this would verify against the sent code
-    // For demo purposes, we'll accept any 6-digit code
-    return code.length === 6 && /^\d+$/.test(code);
-  };
 
   // Process the actual transfer
   const processTransfer = async (transferData: any) => {
@@ -644,31 +624,8 @@ export default function Transfer() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const transferAmount = parseFloat(form.amount);
-    
-    // Check if this is a large transfer requiring 2FA
-    if (transferAmount >= LARGE_TRANSFER_THRESHOLD) {
-      // Store the transfer data for later processing
-      setPendingTransfer({
-        fromAccountId: form.fromAccount,
-        recipientName: form.recipientName,
-        recipientAccountNumber: form.recipientAccountNumber,
-        recipientBankName: form.recipientBankName,
-        amount: transferAmount,
-        note: form.note,
-        kind: form.kind,
-        swiftCode: form.kind === 'international' ? form.swiftCode : '',
-        transferSpeed: form.transferSpeed,
-        transferPin: form.transferPin,
-        saveRecipient: form.saveRecipient
-      });
-      
-      // Generate and send 2FA code
-      generateTwoFactorCode();
-      setShowTwoFactorModal(true);
-      return;
-    }
 
-    // Process regular transfer
+    // Process transfer
     await processTransfer({
       fromAccountId: form.fromAccount,
       recipientName: form.recipientName,
@@ -684,36 +641,6 @@ export default function Transfer() {
     });
   };
 
-  // Handle 2FA verification
-  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pendingTransfer) return;
-
-    setTwoFactorLoading(true);
-
-    try {
-      const isValid = await verifyTwoFactorCode(twoFactorCode);
-      
-      if (isValid) {
-        // Close 2FA modal
-        setShowTwoFactorModal(false);
-        setTwoFactorCode('');
-        
-        // Process the pending transfer
-        await processTransfer(pendingTransfer);
-        
-        // Clear pending transfer
-        setPendingTransfer(null);
-      } else {
-        alert('Invalid verification code. Please try again.');
-      }
-    } catch (error) {
-      console.error('2FA verification failed:', error);
-      alert('Verification failed. Please try again.');
-    } finally {
-      setTwoFactorLoading(false);
-    }
-  };
 
   const handleDownloadReceipt = async () => {
     if (!receiptData) return;
@@ -959,18 +886,6 @@ export default function Transfer() {
               min="0.01"
               required
             />
-            {parseFloat(form.amount) >= LARGE_TRANSFER_THRESHOLD && (
-              <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                  <span className="text-sm text-yellow-800">
-                    Large transfers (${LARGE_TRANSFER_THRESHOLD}+) require two-factor authentication for security.
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Transfer Speed */}
@@ -981,8 +896,7 @@ export default function Transfer() {
             <div className="space-y-3">
               {transferSpeedOptions.map((option) => {
                 const isSelected = form.transferSpeed === option.id;
-                const isOverLimit = parseFloat(form.amount) > option.limit;
-                const isDisabled = !option.available || isOverLimit;
+                const isDisabled = !option.available;
                 
                 return (
                   <div
@@ -1015,18 +929,12 @@ export default function Transfer() {
                             )}
                           </div>
                           <p className="text-sm text-gray-600">{option.description}</p>
-                          <p className="text-xs text-gray-500">Limit: {formatUSD(option.limit)}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium text-gray-900">
                           {option.fee === 0 ? 'Free' : formatUSD(option.fee)}
                         </div>
-                        {isOverLimit && (
-                          <div className="text-xs text-error-600 mt-1">
-                            Amount exceeds limit
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -1257,8 +1165,7 @@ export default function Transfer() {
                 <div className="space-y-3">
                   {transferSpeedOptions.map((option) => {
                     const isSelected = scheduledForm.transferSpeed === option.id;
-                    const isOverLimit = parseFloat(scheduledForm.amount) > option.limit;
-                    const isDisabled = !option.available || isOverLimit;
+                    const isDisabled = !option.available;
                     
                     return (
                       <div
@@ -1291,18 +1198,12 @@ export default function Transfer() {
                                 )}
                               </div>
                               <p className="text-sm text-gray-600">{option.description}</p>
-                              <p className="text-xs text-gray-500">Limit: {formatUSD(option.limit)}</p>
                             </div>
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-medium text-gray-900">
                               {option.fee === 0 ? 'Free' : formatUSD(option.fee)}
                             </div>
-                            {isOverLimit && (
-                              <div className="text-xs text-error-600 mt-1">
-                                Amount exceeds limit
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1818,75 +1719,6 @@ export default function Transfer() {
         </div>
       )}
 
-      {/* Two-Factor Authentication Modal */}
-      <Modal
-        isOpen={showTwoFactorModal}
-        onClose={() => {
-          setShowTwoFactorModal(false);
-          setPendingTransfer(null);
-          setTwoFactorCode('');
-        }}
-        title="Two-Factor Authentication Required"
-      >
-        <div className="space-y-6">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
-              <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Large Transfer Detected</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              For security purposes, transfers of ${LARGE_TRANSFER_THRESHOLD} or more require two-factor authentication.
-            </p>
-            <p className="text-sm text-gray-600">
-              A verification code has been sent to your registered phone number.
-            </p>
-          </div>
-
-          <form onSubmit={handleTwoFactorSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Verification Code *
-              </label>
-              <input
-                type="text"
-                value={twoFactorCode}
-                onChange={(e) => setTwoFactorCode(e.target.value)}
-                placeholder="Enter 6-digit code"
-                maxLength={6}
-                pattern="[0-9]{6}"
-                className="input text-center text-lg tracking-widest"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Demo: Enter any 6-digit number
-              </p>
-            </div>
-
-            <div className="flex space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTwoFactorModal(false);
-                  setPendingTransfer(null);
-                  setTwoFactorCode('');
-                }}
-                className="btn-secondary flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={twoFactorLoading || twoFactorCode.length !== 6}
-                className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {twoFactorLoading ? 'Verifying...' : 'Verify & Transfer'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
 
       {/* Scheduled Transfer Confirmation Modal */}
       <Modal

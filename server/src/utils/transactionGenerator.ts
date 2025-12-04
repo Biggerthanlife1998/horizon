@@ -13,6 +13,17 @@ export interface GeneratedTransaction {
   transactionDate: Date;
 }
 
+// Helper function to ensure a date is in the past (before today)
+const ensurePastDate = (date: Date, today: Date): Date => {
+  if (date >= today) {
+    // If date is today or in the future, set it to yesterday
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday;
+  }
+  return date;
+}
+
 export const generateTransactionHistory = (
   userId: string,
   totalBalance: number,
@@ -25,17 +36,17 @@ export const generateTransactionHistory = (
   const balanceMultiplier = Math.min(Math.max(totalBalance / 10000, 0.5), 3); // 0.5x to 3x multiplier
   const transactions: GeneratedTransaction[] = [];
   
-  // Use user creation date as the "current" date for transaction generation
-  // This makes transaction history dynamic based on when the user was created
-  const baseDate = userCreationDate || new Date();
+  // Use current date as the reference point to ensure all transactions are in the past
+  // Generate transactions going back X months from today, but ensure none are in the future
   const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
-  // Generate transactions going back X months from the base date
-  for (let month = monthsBack; month >= 0; month--) {
-    const monthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - month, 1);
+  // Generate transactions going back X months from today
+  for (let month = monthsBack; month >= 1; month--) {
+    const monthDate = new Date(today.getFullYear(), today.getMonth() - month, 1);
     
     // Monthly salary deposit to checking (always positive)
-    const salaryDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 15);
+    const salaryDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 15), today);
     transactions.push({
       userId,
       accountId: 'checking',
@@ -48,7 +59,7 @@ export const generateTransactionHistory = (
     });
 
     // Monthly interest on savings account
-    const interestDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const interestDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), today);
     const interestAmount = Math.random() * 50 + 10; // $10-60 interest
     transactions.push({
       userId,
@@ -65,7 +76,7 @@ export const generateTransactionHistory = (
     if (creditLimit > 0) {
       const creditTransactions = Math.floor(Math.random() * 8) + 5; // 5-12 transactions per month
       for (let i = 0; i < creditTransactions; i++) {
-        const creditDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 2));
+        const creditDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 2)), today);
         const creditAmount = Math.random() * (creditLimit * 0.1) + 10; // 10% of credit limit max
         
         transactions.push({
@@ -81,7 +92,7 @@ export const generateTransactionHistory = (
       }
 
       // Monthly credit card payment from checking
-      const paymentDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 25);
+      const paymentDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 25), today);
       const paymentAmount = Math.random() * (creditLimit * 0.3) + (creditLimit * 0.1); // 10-40% of credit limit
       transactions.push({
         userId,
@@ -98,7 +109,7 @@ export const generateTransactionHistory = (
     // Grocery transactions (weekly or bi-weekly) - scaled by balance
     const groceryFrequency = transactionRules.groceryFrequency === 'weekly' ? 4 : 2;
     for (let week = 0; week < groceryFrequency; week++) {
-      const groceryDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (week * 7));
+      const groceryDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (week * 7)), today);
       const baseGroceryAmount = Math.random() * 
         (transactionRules.groceryAmount.max - transactionRules.groceryAmount.min) + 
         transactionRules.groceryAmount.min;
@@ -119,7 +130,7 @@ export const generateTransactionHistory = (
     // Gas transactions (2-3 times per month) - scaled by balance
     const gasCount = Math.floor(Math.random() * 2) + 2;
     for (let i = 0; i < gasCount; i++) {
-      const gasDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 5 + (i * 10));
+      const gasDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 5 + (i * 10)), today);
       const baseGasAmount = Math.random() * 
         (transactionRules.gasAmount.max - transactionRules.gasAmount.min) + 
         transactionRules.gasAmount.min;
@@ -140,7 +151,7 @@ export const generateTransactionHistory = (
     // Restaurant transactions (1-3 times per month) - scaled by balance
     const restaurantCount = Math.floor(Math.random() * 3) + 1;
     for (let i = 0; i < restaurantCount; i++) {
-      const restaurantDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 8 + (i * 8));
+      const restaurantDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 8 + (i * 8)), today);
       const baseRestaurantAmount = Math.random() * 
         (transactionRules.restaurantAmount.max - transactionRules.restaurantAmount.min) + 
         transactionRules.restaurantAmount.min;
@@ -161,7 +172,7 @@ export const generateTransactionHistory = (
     // Online purchases (1-2 times per month) - scaled by balance
     const onlineCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < onlineCount; i++) {
-      const onlineDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 12 + (i * 15));
+      const onlineDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 12 + (i * 15)), today);
       const baseOnlineAmount = Math.random() * 
         (transactionRules.onlineAmount.max - transactionRules.onlineAmount.min) + 
         transactionRules.onlineAmount.min;
@@ -182,7 +193,7 @@ export const generateTransactionHistory = (
     // ATM withdrawals (1-2 times per month) - scaled by balance
     const atmCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < atmCount; i++) {
-      const atmDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 20 + (i * 5));
+      const atmDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 20 + (i * 5)), today);
       const baseAtmAmount = Math.floor(Math.random() * 200) + 40; // $40-$240
       const atmAmount = baseAtmAmount * balanceMultiplier;
       
@@ -201,7 +212,7 @@ export const generateTransactionHistory = (
     // Donation transactions (1-2 times per month) - scaled by balance
     const donationCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < donationCount; i++) {
-      const donationDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 15 + (i * 10));
+      const donationDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 15 + (i * 10)), today);
       const baseDonationAmount = Math.random() * 200 + 25; // $25-$225
       const donationAmount = baseDonationAmount * balanceMultiplier;
       
@@ -219,7 +230,7 @@ export const generateTransactionHistory = (
 
     // Monthly fees (if balance is low)
     if (totalBalance < 1000) {
-      const feeDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 28);
+      const feeDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 28), today);
       transactions.push({
         userId,
         accountId: 'checking',
@@ -233,7 +244,7 @@ export const generateTransactionHistory = (
     }
 
     // Savings transfers (monthly)
-    const savingsDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 25);
+    const savingsDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 25), today);
     const savingsAmount = Math.floor(transactionRules.salaryAmount * 0.1); // 10% of salary
     
     transactions.push({
@@ -260,7 +271,7 @@ export const generateTransactionHistory = (
     });
 
     // Interest earned on savings (monthly) - using a fixed amount for simplicity
-    const savingsInterestDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const savingsInterestDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), today);
     const savingsInterestAmount = Math.random() * 50 + 10; // $10-60 interest
     
     transactions.push({
@@ -277,7 +288,7 @@ export const generateTransactionHistory = (
     // Additional checking account transactions (more variety) - scaled by balance
     const additionalCheckingTransactions = Math.floor(Math.random() * 8) + 5; // 5-12 additional transactions
     for (let i = 0; i < additionalCheckingTransactions; i++) {
-      const additionalDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 3));
+      const additionalDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 3)), today);
       const baseAdditionalAmount = Math.random() * 150 + 25; // $25-$175
       const additionalAmount = baseAdditionalAmount * balanceMultiplier;
       

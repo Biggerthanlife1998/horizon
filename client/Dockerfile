@@ -14,7 +14,7 @@ RUN npm install --legacy-peer-deps --no-optional --no-audit --no-fund
 COPY . .
 
 # Build the application with environment variables
-ENV VITE_API_URL=https://horizon-bank-api.onrender.com/api
+ENV VITE_API_URL=https://horizon-bank-api.onrender.com
 RUN npx vite build
 
 # Stage 2: Serve the application with Nginx

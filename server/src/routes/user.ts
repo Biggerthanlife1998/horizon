@@ -481,8 +481,9 @@ router.get('/accounts/:type/transactions', authenticateToken, async (req: Reques
     const skip = (Number(page) - 1) * Number(limit);
     
     // Get transactions with pagination
+    // Sort by createdAt first to show newest transactions first
     const transactions = await Transaction.find(query)
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean();
@@ -528,8 +529,10 @@ router.get('/accounts/:type/transactions', authenticateToken, async (req: Reques
 router.get('/transactions/recent', authenticateToken, async (req: Request, res: Response) => {
   try {
     // Get 25 most recent transactions
+    // Sort by createdAt first (when transaction was actually created) to show newest first
+    // This ensures real transactions (like transfers) appear before old generated ones
     const transactions = await Transaction.find({ userId: req.user._id })
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .limit(25)
       .lean();
 
@@ -596,8 +599,9 @@ router.get('/transactions', authenticateToken, async (req: Request, res: Respons
     const skip = (parseInt(page as string) - 1) * parseInt(limit as string);
     
     // Get transactions with pagination
+    // Sort by createdAt first to show newest transactions first
     const transactions = await Transaction.find(query)
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .skip(skip)
       .limit(parseInt(limit as string))
       .lean();
@@ -858,8 +862,9 @@ router.get('/transfer/history', authenticateToken, async (req: Request, res: Res
     const skip = (Number(page) - 1) * Number(limit);
     
     // Get transactions with pagination
+    // Sort by createdAt first to show newest transactions first
     const transactions = await Transaction.find(query)
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean();
@@ -1132,8 +1137,9 @@ router.get('/payments/history', authenticateToken, async (req: Request, res: Res
     const skip = (Number(page) - 1) * Number(limit);
     
     // Get payment transactions with pagination
+    // Sort by createdAt first to show newest transactions first
     const transactions = await Transaction.find(query)
-      .sort({ transactionDate: -1, createdAt: -1 })
+      .sort({ createdAt: -1, transactionDate: -1 })
       .skip(skip)
       .limit(Number(limit))
       .lean();

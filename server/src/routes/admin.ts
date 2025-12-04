@@ -332,6 +332,76 @@ router.delete('/cleanup', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/admin/fix-transaction-dates - Fix transactions with future dates
+router.post('/fix-transaction-dates', async (req: Request, res: Response) => {
+  try {
+    // Verify admin password
+    const adminPassword = req.headers['x-admin-password'];
+    if (!adminPassword || adminPassword.toString().trim() !== process.env.ADMIN_PASSWORD?.trim()) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid admin password'
+      });
+    }
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+
+    // Find all transactions with future dates
+    const futureTransactions = await Transaction.find({
+      transactionDate: { $gt: today }
+    });
+
+    let fixedCount = 0;
+    const now = new Date();
+    
+    // Fix each transaction by setting its date to a random date in the past (within last 6 months)
+    // Sort transactions by their original date to maintain some order
+    const sortedTransactions = futureTransactions.sort((a, b) => 
+      a.transactionDate.getTime() - b.transactionDate.getTime()
+    );
+    
+    for (let i = 0; i < sortedTransactions.length; i++) {
+      const transaction = sortedTransactions[i];
+      
+      // Distribute transactions evenly over the last 6 months
+      // More recent transactions (in the sorted list) get more recent dates
+      const progress = i / sortedTransactions.length; // 0 to 1
+      const monthsBack = Math.floor(progress * 6); // 0 to 5 months back
+      const daysInMonth = Math.floor(Math.random() * 28) + 1; // 1-28 days
+      
+      const fixedDate = new Date(now.getFullYear(), now.getMonth() - monthsBack, daysInMonth);
+      
+      // Ensure the date is not in the future
+      if (fixedDate >= today) {
+        // Set to yesterday if somehow still in future
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        fixedDate.setTime(yesterday.getTime());
+      }
+      
+      transaction.transactionDate = fixedDate;
+      await transaction.save();
+      fixedCount++;
+    }
+
+    res.json({
+      message: 'Transaction dates fixed successfully',
+      fixed: {
+        count: fixedCount,
+        transactions: fixedCount
+      }
+    });
+
+  } catch (error) {
+    console.error('Fix transaction dates error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fix transaction dates'
+    });
+  }
+});
+
 // PUT /api/admin/set-transfer-pin/:userId
 router.put('/set-transfer-pin/:userId', async (req: Request, res: Response) => {
   try {

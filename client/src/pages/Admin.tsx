@@ -94,6 +94,12 @@ interface DebitHistoryItem {
   };
 }
 
+// Helper function to get API base URL with /api suffix
+const getApiUrl = () => {
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+};
+
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<'users' | 'credit-alert' | 'edit-user'>('users');
   
@@ -171,7 +177,7 @@ export default function Admin() {
     const fetchUsers = async () => {
       try {
         // Use fetch directly to avoid API interceptor redirects
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/users`, {
+        const response = await fetch(`${getApiUrl()}/admin/users`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -216,7 +222,7 @@ export default function Admin() {
     const fetchEditUsers = async () => {
       if (activeTab === 'edit-user' && editAdminPassword) {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/users`, {
+          const response = await fetch(`${getApiUrl()}/admin/users`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -295,7 +301,7 @@ export default function Admin() {
         formData.append('profilePicture', form.profilePicture);
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/create-user`, {
+      const response = await fetch(`${getApiUrl()}/admin/create-user`, {
         method: 'POST',
         headers: {
           'X-Admin-Password': adminPassword,
@@ -396,7 +402,7 @@ export default function Admin() {
     setToast(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/edit-user/${selectedEditUser._id}`, {
+      const response = await fetch(`${getApiUrl()}/admin/edit-user/${selectedEditUser._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -452,7 +458,7 @@ export default function Admin() {
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/reset-password/${selectedEditUser._id}`, {
+      const response = await fetch(`${getApiUrl()}/admin/reset-password/${selectedEditUser._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -485,7 +491,7 @@ export default function Admin() {
     setToast(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/credit-alert`, {
+      const response = await fetch(`${getApiUrl()}/admin/credit-alert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -554,7 +560,7 @@ export default function Admin() {
     setToast(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/debit-alert`, {
+      const response = await fetch(`${getApiUrl()}/admin/debit-alert`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -619,7 +625,7 @@ export default function Admin() {
 
   const fetchCreditHistory = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/credit-history`, {
+      const response = await fetch(`${getApiUrl()}/admin/credit-history`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -641,7 +647,7 @@ export default function Admin() {
 
   const fetchDebitHistory = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/admin/debit-history`, {
+      const response = await fetch(`${getApiUrl()}/admin/debit-history`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
