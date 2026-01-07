@@ -1,8 +1,13 @@
 import axios from 'axios';
 
-// Get base URL and ensure it has /api suffix
-const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const API_BASE_URL = baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+// Get base URL and ensure it has /api suffix (but not double /api/api)
+let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+// Remove trailing slash if present
+baseUrl = baseUrl.replace(/\/$/, '');
+// Remove /api if it already exists to avoid double /api/api
+baseUrl = baseUrl.replace(/\/api$/, '');
+// Now append /api
+const API_BASE_URL = `${baseUrl}/api`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

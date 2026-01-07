@@ -94,10 +94,15 @@ interface DebitHistoryItem {
   };
 }
 
-// Helper function to get API base URL with /api suffix
+// Helper function to get API base URL with /api suffix (but not double /api/api)
 const getApiUrl = () => {
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+  let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  // Remove trailing slash if present
+  baseUrl = baseUrl.replace(/\/$/, '');
+  // Remove /api if it already exists to avoid double /api/api
+  baseUrl = baseUrl.replace(/\/api$/, '');
+  // Now append /api
+  return `${baseUrl}/api`;
 };
 
 export default function Admin() {
