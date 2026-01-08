@@ -52,7 +52,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       )}
       
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl transform transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 z-50 w-64 bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl transform transition-transform duration-300 ease-in-out flex flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0
       `}>
@@ -95,10 +95,10 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </nav>
 
         {/* Logout Button */}
-        <div className="px-4 py-4 border-t border-gray-200/50">
+        <div className="px-4 py-4 border-t border-gray-200/50 mt-auto bg-white/95 backdrop-blur-sm">
           <button
             onClick={handleLogout}
-            className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors z-10 relative"
           >
             <LogOut className="w-5 h-5 mr-3" />
             Logout

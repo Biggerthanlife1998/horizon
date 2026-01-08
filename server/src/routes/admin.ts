@@ -508,7 +508,7 @@ router.post('/credit-alert', async (req: Request, res: Response) => {
       });
     }
 
-    const { userId, accountType, amount, note } = req.body;
+    const { userId, accountType, amount, note, isPending } = req.body;
 
     // Validate required fields
     if (!userId || !accountType || !amount) {
@@ -552,19 +552,24 @@ router.post('/credit-alert', async (req: Request, res: Response) => {
       });
     }
 
-    // Update account balance
     const oldBalance = account.accountDistribution[accountType as keyof typeof account.accountDistribution];
-    const newBalance = oldBalance + creditAmount;
-    
-    // Update the specific account type
-    account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
-    
-    // Recalculate total balance
-    account.totalBalance = account.accountDistribution.checking + 
-                          account.accountDistribution.savings + 
-                          account.accountDistribution.credit;
+    let newBalance = oldBalance;
+    const transactionStatus = isPending ? 'pending' : 'completed';
 
-    await account.save();
+    // Only update balance if not pending
+    if (!isPending) {
+      newBalance = oldBalance + creditAmount;
+      
+      // Update the specific account type
+      account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+      
+      // Recalculate total balance
+      account.totalBalance = account.accountDistribution.checking + 
+                            account.accountDistribution.savings + 
+                            account.accountDistribution.credit;
+
+      await account.save();
+    }
 
     // Create transaction record for the credit alert
     const transaction = new Transaction({
@@ -572,15 +577,16 @@ router.post('/credit-alert', async (req: Request, res: Response) => {
       accountId: accountType,
       type: 'deposit',
       amount: creditAmount,
-      description: `Credit Alert - ${note || 'Admin credit'}`,
+      description: note || 'Admin credit',
       category: 'Credit Alert',
-      status: 'completed',
+      status: transactionStatus,
       transactionDate: new Date(),
       metadata: {
         adminCredit: true,
         note: note || 'Admin credit alert',
         oldBalance: oldBalance,
-        newBalance: newBalance
+        newBalance: isPending ? oldBalance : newBalance,
+        isPending: isPending || false
       }
     });
 
@@ -670,7 +676,7 @@ router.post('/debit-alert', async (req: Request, res: Response) => {
       });
     }
 
-    const { userId, accountType, amount, note } = req.body;
+    const { userId, accountType, amount, note, isPending } = req.body;
 
     // Validate required fields
     if (!userId || !accountType || !amount) {
@@ -714,7 +720,7 @@ router.post('/debit-alert', async (req: Request, res: Response) => {
       });
     }
 
-    // Check if user has sufficient balance
+    // Check if user has sufficient balance (even for pending, we validate)
     const currentBalance = account.accountDistribution[accountType as keyof typeof account.accountDistribution];
     if (currentBalance < debitAmount) {
       return res.status(400).json({
@@ -723,18 +729,23 @@ router.post('/debit-alert', async (req: Request, res: Response) => {
       });
     }
 
-    // Update account balance
-    const newBalance = currentBalance - debitAmount;
-    
-    // Update the specific account type
-    account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
-    
-    // Recalculate total balance
-    account.totalBalance = account.accountDistribution.checking + 
-                          account.accountDistribution.savings + 
-                          account.accountDistribution.credit;
+    const transactionStatus = isPending ? 'pending' : 'completed';
+    let newBalance = currentBalance;
 
-    await account.save();
+    // Only update balance if not pending
+    if (!isPending) {
+      newBalance = currentBalance - debitAmount;
+      
+      // Update the specific account type
+      account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+      
+      // Recalculate total balance
+      account.totalBalance = account.accountDistribution.checking + 
+                            account.accountDistribution.savings + 
+                            account.accountDistribution.credit;
+
+      await account.save();
+    }
 
     // Create transaction record for the debit alert
     const transaction = new Transaction({
@@ -742,15 +753,16 @@ router.post('/debit-alert', async (req: Request, res: Response) => {
       accountId: accountType,
       type: 'withdrawal',
       amount: -debitAmount, // Negative amount for debit
-      description: `Debit Alert - ${note || 'Admin debit'}`,
+      description: note || 'Admin debit',
       category: 'Debit Alert',
-      status: 'completed',
+      status: transactionStatus,
       transactionDate: new Date(),
       metadata: {
         adminDebit: true,
         note: note || 'Admin debit alert',
         oldBalance: currentBalance,
-        newBalance: newBalance
+        newBalance: isPending ? currentBalance : newBalance,
+        isPending: isPending || false
       }
     });
 
@@ -824,6 +836,226 @@ router.get('/debit-history', async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to retrieve debit history'
+    });
+  }
+});
+
+// PUT /api/admin/update-transaction-status/:transactionId - Update transaction status
+router.put('/update-transaction-status/:transactionId', async (req: Request, res: Response) => {
+  try {
+    // Verify admin password
+    const adminPassword = req.headers['x-admin-password'];
+    if (!adminPassword || adminPassword.toString().trim() !== process.env.ADMIN_PASSWORD?.trim()) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid admin password'
+      });
+    }
+
+    const { transactionId } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!status || !['pending', 'completed', 'failed'].includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid status',
+        message: 'Status must be pending, completed, or failed'
+      });
+    }
+
+    // Find transaction
+    const transaction = await Transaction.findById(transactionId);
+    if (!transaction) {
+      return res.status(404).json({
+        error: 'Transaction not found',
+        message: 'Transaction with the specified ID does not exist'
+      });
+    }
+
+    // Check if it's an admin transaction
+    const isAdminCredit = transaction.metadata?.adminCredit === true;
+    const isAdminDebit = transaction.metadata?.adminDebit === true;
+    
+    if (!isAdminCredit && !isAdminDebit) {
+      return res.status(400).json({
+        error: 'Invalid transaction',
+        message: 'This transaction is not an admin credit/debit alert'
+      });
+    }
+
+    // Find user and account
+    const user = await User.findById(transaction.userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User associated with this transaction does not exist'
+      });
+    }
+
+    const account = await Account.findOne({ userId: transaction.userId });
+    if (!account) {
+      return res.status(404).json({
+        error: 'Account not found',
+        message: 'Account associated with this transaction does not exist'
+      });
+    }
+
+    const oldStatus = transaction.status;
+    const accountType = transaction.accountId;
+    const currentBalance = account.accountDistribution[accountType as keyof typeof account.accountDistribution];
+    const transactionAmount = Math.abs(transaction.amount);
+
+    // Handle status change and balance update
+    if (oldStatus === 'pending' && status === 'completed') {
+      // Moving from pending to completed - apply the transaction
+      if (isAdminCredit) {
+        // Credit: add to balance
+        const newBalance = currentBalance + transactionAmount;
+        account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+        account.totalBalance = account.accountDistribution.checking + 
+                              account.accountDistribution.savings + 
+                              account.accountDistribution.credit;
+        await account.save();
+        
+        // Update metadata
+        transaction.metadata = {
+          ...transaction.metadata,
+          oldBalance: currentBalance,
+          newBalance: newBalance,
+          isPending: false
+        };
+      } else if (isAdminDebit) {
+        // Debit: subtract from balance (check sufficient funds)
+        if (currentBalance < transactionAmount) {
+          return res.status(400).json({
+            error: 'Insufficient funds',
+            message: `User only has $${currentBalance.toFixed(2)} in ${accountType} account`
+          });
+        }
+        const newBalance = currentBalance - transactionAmount;
+        account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+        account.totalBalance = account.accountDistribution.checking + 
+                              account.accountDistribution.savings + 
+                              account.accountDistribution.credit;
+        await account.save();
+        
+        // Update metadata
+        transaction.metadata = {
+          ...transaction.metadata,
+          oldBalance: currentBalance,
+          newBalance: newBalance,
+          isPending: false
+        };
+      }
+    } else if (oldStatus === 'completed' && status === 'pending') {
+      // Moving from completed to pending - reverse the transaction
+      if (isAdminCredit) {
+        // Credit: subtract from balance (check sufficient funds)
+        if (currentBalance < transactionAmount) {
+          return res.status(400).json({
+            error: 'Insufficient funds',
+            message: `Cannot reverse: User only has $${currentBalance.toFixed(2)} in ${accountType} account`
+          });
+        }
+        const newBalance = currentBalance - transactionAmount;
+        account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+        account.totalBalance = account.accountDistribution.checking + 
+                              account.accountDistribution.savings + 
+                              account.accountDistribution.credit;
+        await account.save();
+        
+        // Update metadata
+        transaction.metadata = {
+          ...transaction.metadata,
+          oldBalance: currentBalance,
+          newBalance: newBalance,
+          isPending: true
+        };
+      } else if (isAdminDebit) {
+        // Debit: add back to balance
+        const newBalance = currentBalance + transactionAmount;
+        account.accountDistribution[accountType as keyof typeof account.accountDistribution] = newBalance;
+        account.totalBalance = account.accountDistribution.checking + 
+                              account.accountDistribution.savings + 
+                              account.accountDistribution.credit;
+        await account.save();
+        
+        // Update metadata
+        transaction.metadata = {
+          ...transaction.metadata,
+          oldBalance: currentBalance,
+          newBalance: newBalance,
+          isPending: true
+        };
+      }
+    }
+
+    // Update transaction status
+    transaction.status = status;
+    await transaction.save();
+
+    res.json({
+      message: 'Transaction status updated successfully',
+      transaction: {
+        id: transaction._id,
+        status: transaction.status,
+        description: transaction.description,
+        amount: transaction.amount,
+        accountType: transaction.accountId,
+        oldStatus,
+        newStatus: status
+      },
+      account: {
+        accountType,
+        oldBalance: currentBalance,
+        newBalance: account.accountDistribution[accountType as keyof typeof account.accountDistribution]
+      }
+    });
+
+  } catch (error) {
+    console.error('Update transaction status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to update transaction status'
+    });
+  }
+});
+
+// GET /api/admin/user-pending-transactions/:userId - Get pending transactions for a user
+router.get('/user-pending-transactions/:userId', async (req: Request, res: Response) => {
+  try {
+    // Verify admin password
+    const adminPassword = req.headers['x-admin-password'];
+    if (!adminPassword || adminPassword.toString().trim() !== process.env.ADMIN_PASSWORD?.trim()) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid admin password'
+      });
+    }
+
+    const { userId } = req.params;
+
+    // Find all pending admin transactions for this user
+    const pendingTransactions = await Transaction.find({
+      userId,
+      status: 'pending',
+      $or: [
+        { 'metadata.adminCredit': true },
+        { 'metadata.adminDebit': true }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+    res.json({
+      pendingTransactions
+    });
+
+  } catch (error) {
+    console.error('Get pending transactions error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to retrieve pending transactions'
     });
   }
 });

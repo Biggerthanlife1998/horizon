@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Upload, CheckCircle, AlertCircle, DollarSign, History, Users, Search, Plus, Minus, XCircle, MessageSquare, Edit } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, DollarSign, History, Users, Search, Plus, Minus, XCircle, MessageSquare, Edit, Clock, Loader2 } from 'lucide-react';
 
 interface CreateUserForm {
   firstName: string;
@@ -29,6 +29,7 @@ interface CreditAlertForm {
   amount: string;
   note: string;
   alertName: string;
+  isPending: boolean;
 }
 
 interface DebitAlertForm {
@@ -37,6 +38,7 @@ interface DebitAlertForm {
   amount: string;
   note: string;
   alertName: string;
+  isPending: boolean;
 }
 
 interface User {
@@ -135,14 +137,16 @@ export default function Admin() {
     accountType: 'checking',
     amount: '',
     note: '',
-    alertName: ''
+    alertName: '',
+    isPending: false
   });
   const [debitForm, setDebitForm] = useState<DebitAlertForm>({
     userId: '',
     accountType: 'checking',
     amount: '',
     note: '',
-    alertName: ''
+    alertName: '',
+    isPending: false
   });
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -154,6 +158,9 @@ export default function Admin() {
   const [showCreditHistory, setShowCreditHistory] = useState(false);
   const [showDebitHistory, setShowDebitHistory] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
+  const [loadingPendingTransactions, setLoadingPendingTransactions] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   // Edit User State
   const [editUserSearch, setEditUserSearch] = useState('');
@@ -359,13 +366,21 @@ export default function Admin() {
 
   // Credit Alert Functions
   const handleCreditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setCreditForm(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setCreditForm(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleDebitInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setDebitForm(prev => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const checked = (e.target as HTMLInputElement).checked;
+    setDebitForm(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const selectUser = (user: User) => {
@@ -373,6 +388,101 @@ export default function Admin() {
     setCreditForm(prev => ({ ...prev, userId: user._id }));
     setDebitForm(prev => ({ ...prev, userId: user._id }));
     setUserSearch('');
+    // Fetch pending transactions for this user
+    fetchPendingTransactions(user._id);
+  };
+
+  const fetchPendingTransactions = async (userId: string) => {
+    if (!adminPassword) return;
+    
+    setLoadingPendingTransactions(true);
+    try {
+      const response = await fetch(`${getApiUrl()}/admin/user-pending-transactions/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPendingTransactions(data.pendingTransactions || []);
+      } else {
+        console.error('Failed to fetch pending transactions:', response.statusText);
+        setPendingTransactions([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch pending transactions:', error);
+      setPendingTransactions([]);
+    } finally {
+      setLoadingPendingTransactions(false);
+    }
+  };
+
+  const updateTransactionStatus = async (transactionId: string, newStatus: 'pending' | 'completed') => {
+    if (!adminPassword) return;
+
+    setUpdatingStatus(transactionId);
+    try {
+      const response = await fetch(`${getApiUrl()}/admin/update-transaction-status/${transactionId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setToast({
+          type: 'success',
+          message: `Transaction status updated to ${newStatus}. Balance updated.`
+        });
+        
+        // Refresh pending transactions
+        if (selectedUser) {
+          fetchPendingTransactions(selectedUser._id);
+        }
+        
+        // Refresh users list to update balances
+        const usersResponse = await fetch(`${getApiUrl()}/admin/users`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Password': adminPassword
+          }
+        });
+        
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.users);
+          setFilteredUsers(usersData.users);
+          
+          // Update selected user if it's the same user
+          if (selectedUser) {
+            const updatedUser = usersData.users.find((u: User) => u._id === selectedUser._id);
+            if (updatedUser) {
+              setSelectedUser(updatedUser);
+            }
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        setToast({
+          type: 'error',
+          message: errorData.message || 'Failed to update transaction status'
+        });
+      }
+    } catch (error: any) {
+      setToast({
+        type: 'error',
+        message: 'Failed to update transaction status. Please try again.'
+      });
+    } finally {
+      setUpdatingStatus(null);
+    }
   };
 
   const selectEditUser = (user: User) => {
@@ -506,7 +616,8 @@ export default function Admin() {
           userId: creditForm.userId,
           accountType: creditForm.accountType,
           amount: parseFloat(creditForm.amount),
-          note: creditForm.alertName || creditForm.note
+          note: creditForm.alertName || creditForm.note,
+          isPending: creditForm.isPending
         })
       });
 
@@ -517,15 +628,25 @@ export default function Admin() {
           message: `Credit alert processed: $${creditForm.amount} added to ${data.creditAlert.userName}'s ${creditForm.accountType} account`
         });
 
+        // Refresh pending transactions if user is still selected
+        if (selectedUser && creditForm.isPending) {
+          fetchPendingTransactions(selectedUser._id);
+        }
+
         // Reset form
         setCreditForm({
           userId: '',
           accountType: 'checking',
           amount: '',
           note: '',
-          alertName: ''
+          alertName: '',
+          isPending: false
         });
-        setSelectedUser(null);
+        
+        // Only clear selected user if transaction is completed
+        if (!creditForm.isPending) {
+          setSelectedUser(null);
+        }
 
         // Refresh users list
         const usersResponse = await fetch('http://localhost:4000/api/admin/users', {
@@ -575,7 +696,8 @@ export default function Admin() {
           userId: debitForm.userId,
           accountType: debitForm.accountType,
           amount: parseFloat(debitForm.amount),
-          note: debitForm.alertName || debitForm.note
+          note: debitForm.alertName || debitForm.note,
+          isPending: debitForm.isPending
         })
       });
 
@@ -586,15 +708,25 @@ export default function Admin() {
           message: `Debit alert processed: $${debitForm.amount} removed from ${data.debitAlert.userName}'s ${debitForm.accountType} account`
         });
 
+        // Refresh pending transactions if user is still selected
+        if (selectedUser && debitForm.isPending) {
+          fetchPendingTransactions(selectedUser._id);
+        }
+
         // Reset form
         setDebitForm({
           userId: '',
           accountType: 'checking',
           amount: '',
           note: '',
-          alertName: ''
+          alertName: '',
+          isPending: false
         });
-        setSelectedUser(null);
+        
+        // Only clear selected user if transaction is completed
+        if (!debitForm.isPending) {
+          setSelectedUser(null);
+        }
 
         // Refresh users list
         const usersResponse = await fetch('http://localhost:4000/api/admin/users', {
@@ -1274,6 +1406,21 @@ export default function Admin() {
                         />
                       </div>
 
+                      {/* Mark as Pending Checkbox */}
+                      <div className="flex items-center">
+                        <input
+                          id="creditIsPending"
+                          name="isPending"
+                          type="checkbox"
+                          checked={creditForm.isPending}
+                          onChange={handleCreditInputChange}
+                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                        />
+                        <label htmlFor="creditIsPending" className="ml-2 text-sm text-gray-700">
+                          Mark as Pending (Transaction will appear as pending, balance won't update)
+                        </label>
+                      </div>
+
                       {/* Submit Button */}
                       <button
                         type="submit"
@@ -1374,6 +1521,21 @@ export default function Admin() {
                         />
                       </div>
 
+                      {/* Mark as Pending Checkbox */}
+                      <div className="flex items-center">
+                        <input
+                          id="debitIsPending"
+                          name="isPending"
+                          type="checkbox"
+                          checked={debitForm.isPending}
+                          onChange={handleDebitInputChange}
+                          className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
+                        />
+                        <label htmlFor="debitIsPending" className="ml-2 text-sm text-gray-700">
+                          Mark as Pending (Transaction will appear as pending, balance won't update)
+                        </label>
+                      </div>
+
                       {/* Submit Button */}
                       <button
                         type="submit"
@@ -1394,6 +1556,106 @@ export default function Admin() {
                       </button>
                     </form>
                   </div>
+                </div>
+              )}
+
+              {/* Pending Transactions Section */}
+              {adminPassword && selectedUser && (
+                <div className="card mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <Clock className="w-5 h-5 text-yellow-600 mr-2" />
+                      <h3 className="text-lg font-semibold text-gray-900">Pending Transactions</h3>
+                    </div>
+                    <button
+                      onClick={() => selectedUser && fetchPendingTransactions(selectedUser._id)}
+                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center"
+                      disabled={loadingPendingTransactions}
+                    >
+                      {loadingPendingTransactions ? (
+                        <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                      ) : (
+                        <History className="w-4 h-4 mr-1" />
+                      )}
+                      Refresh
+                    </button>
+                  </div>
+
+                  {loadingPendingTransactions ? (
+                    <div className="text-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary-600 mx-auto" />
+                      <p className="text-sm text-gray-500 mt-2">Loading pending transactions...</p>
+                    </div>
+                  ) : pendingTransactions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No pending transactions for this user</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {pendingTransactions.map((transaction) => (
+                        <div
+                          key={transaction._id}
+                          className="border border-yellow-200 rounded-lg p-4 bg-yellow-50/50"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                  <Clock className="w-3 h-3 mr-1 inline" />
+                                  Pending
+                                </span>
+                                <span className="text-xs text-gray-500 capitalize">
+                                  {transaction.accountId} Account
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-gray-900 mb-1">
+                                {transaction.description}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(transaction.transactionDate).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-3 ml-4">
+                              <div className="text-right">
+                                <p className={`text-lg font-bold ${
+                                  transaction.metadata?.adminCredit ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {transaction.metadata?.adminCredit ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {transaction.metadata?.adminCredit ? 'Credit' : 'Debit'}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => updateTransactionStatus(transaction._id, 'completed')}
+                                disabled={updatingStatus === transaction._id}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                              >
+                                {updatingStatus === transaction._id ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="w-3 h-3 mr-1" />
+                                    Complete
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

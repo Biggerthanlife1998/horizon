@@ -43,6 +43,15 @@ api.interceptors.response.use(
         return Promise.reject(error);
       }
       
+      // Don't redirect if we're already on the login page or if it's a login request
+      const isLoginRequest = error.config?.url?.includes('/auth/login');
+      const isOnLoginPage = window.location.pathname === '/login' || window.location.pathname === '/';
+      
+      if (isLoginRequest || isOnLoginPage) {
+        // Let the login page handle the error display
+        return Promise.reject(error);
+      }
+      
       // Handle unauthorized access (token expired, invalid token, etc.)
       localStorage.removeItem('token');
       window.location.href = '/login';

@@ -64,6 +64,10 @@ export default function HomePage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setLoginForm(prev => ({ ...prev, [name]: value }));
+    // Clear error when user starts typing
+    if (error) {
+      setError('');
+    }
   };
 
   const features = [
@@ -290,8 +294,20 @@ export default function HomePage() {
             <form onSubmit={handleLogin} className="space-y-4">
               {/* Error Message */}
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                  {error}
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-in fade-in duration-300">
+                  <div className="flex items-start justify-between">
+                    <p className="flex-1">{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => setError('')}
+                      className="ml-2 text-red-400 hover:text-red-600 transition-colors"
+                      aria-label="Dismiss error"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               )}
 

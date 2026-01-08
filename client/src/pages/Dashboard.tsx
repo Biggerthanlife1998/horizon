@@ -9,7 +9,9 @@ import {
   ArrowDownLeft,
   CreditCard,
   PiggyBank,
-  Loader2
+  Loader2,
+  Clock,
+  CheckCircle
 } from 'lucide-react';
 
 interface Account {
@@ -110,7 +112,7 @@ export default function Dashboard() {
             {getTransactionIcon(row.type)}
           </div>
           <div className="ml-3">
-            <div className="text-sm font-medium text-gray-900">
+            <div className={`text-sm font-medium ${row.status === 'pending' ? 'text-gray-600 opacity-80' : 'text-gray-900'}`}>
               {value}
             </div>
           </div>
@@ -152,9 +154,21 @@ export default function Dashboard() {
       label: 'Amount',
       mobile: true,
       className: 'text-right',
-      render: (value: number) => (
-        <span className={`text-sm font-medium ${value > 0 ? 'text-success-600' : 'text-error-600'}`}>
+      render: (value: number, row: any) => (
+        <span className={`text-sm font-medium ${value > 0 ? 'text-success-600' : 'text-error-600'} ${row.status === 'pending' ? 'opacity-70' : ''}`}>
           {value > 0 ? '+' : ''}{formatUSD(value)}
+        </span>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      mobile: true,
+      render: (value: string) => (
+        <span className={getStatusBadge(value)}>
+          {value === 'pending' && <Clock className="w-3 h-3 mr-1 inline" />}
+          {value === 'completed' && <CheckCircle className="w-3 h-3 mr-1 inline" />}
+          {value === 'pending' ? 'Pending' : value === 'completed' ? 'Completed' : value === 'failed' ? 'Failed' : value}
         </span>
       )
     }
@@ -198,6 +212,19 @@ export default function Dashboard() {
         return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800';
       case 'transfer':
         return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800';
+      default:
+        return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800';
+      case 'completed':
+        return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800';
+      case 'failed':
+        return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800';
       default:
         return 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800';
     }

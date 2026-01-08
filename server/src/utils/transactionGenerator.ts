@@ -36,17 +36,38 @@ export const generateTransactionHistory = (
   const balanceMultiplier = Math.min(Math.max(totalBalance / 10000, 0.5), 3); // 0.5x to 3x multiplier
   const transactions: GeneratedTransaction[] = [];
   
-  // Use current date as the reference point to ensure all transactions are in the past
-  // Generate transactions going back X months from today, but ensure none are in the future
+  // Use account creation date as reference point (or a few days after creation)
+  // If no creation date provided, use 3 months ago from today as fallback
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
-  // Generate transactions going back X months from today
-  for (let month = monthsBack; month >= 1; month--) {
-    const monthDate = new Date(today.getFullYear(), today.getMonth() - month, 1);
+  let referenceDate: Date;
+  if (userCreationDate) {
+    // Start transactions a few days after account creation (2-5 days)
+    const daysAfterCreation = Math.floor(Math.random() * 4) + 2;
+    referenceDate = new Date(userCreationDate);
+    referenceDate.setDate(referenceDate.getDate() + daysAfterCreation);
+    // Ensure reference date is not in the future
+    if (referenceDate > today) {
+      referenceDate = new Date(today);
+      referenceDate.setDate(referenceDate.getDate() - 1);
+    }
+  } else {
+    // Fallback: use 3 months ago
+    referenceDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+  }
+  
+  // Generate transactions going back 2-3 months from account creation (not too far)
+  const actualMonthsBack = Math.min(monthsBack, 3); // Cap at 3 months to not go too far back
+  for (let month = actualMonthsBack; month >= 1; month--) {
+    const monthDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - month, 1);
     
     // Monthly salary deposit to checking (always positive)
-    const salaryDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 15), today);
+    // Random day between 10-20 of the month, random time
+    const salaryDay = Math.floor(Math.random() * 11) + 10; // 10-20
+    const salaryDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), salaryDay);
+    salaryDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0); // 8 AM - 8 PM
+    const finalSalaryDate = ensurePastDate(salaryDate, today);
     transactions.push({
       userId,
       accountId: 'checking',
@@ -55,11 +76,15 @@ export const generateTransactionHistory = (
       description: 'Salary Deposit - Direct Deposit',
       category: 'Income',
       status: 'completed',
-      transactionDate: salaryDate
+      transactionDate: finalSalaryDate
     });
 
     // Monthly interest on savings account
-    const interestDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), today);
+    // Random day between 1-5 of the month, random time
+    const interestDay = Math.floor(Math.random() * 5) + 1; // 1-5
+    const interestDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), interestDay);
+    interestDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 5 PM
+    const finalInterestDate = ensurePastDate(interestDate, today);
     const interestAmount = Math.random() * 50 + 10; // $10-60 interest
     transactions.push({
       userId,
@@ -68,7 +93,7 @@ export const generateTransactionHistory = (
       amount: interestAmount,
       description: 'Interest Payment',
       category: 'Interest',
-      transactionDate: interestDate,
+      transactionDate: finalInterestDate,
       status: 'completed'
     });
 
@@ -76,7 +101,11 @@ export const generateTransactionHistory = (
     if (creditLimit > 0) {
       const creditTransactions = Math.floor(Math.random() * 8) + 5; // 5-12 transactions per month
       for (let i = 0; i < creditTransactions; i++) {
-        const creditDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 2)), today);
+        // Random day throughout the month, random time
+        const creditDay = Math.floor(Math.random() * 28) + 1; // 1-28
+        const creditDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), creditDay);
+        creditDate.setHours(Math.floor(Math.random() * 16) + 6, Math.floor(Math.random() * 60), 0, 0); // 6 AM - 10 PM
+        const finalCreditDate = ensurePastDate(creditDate, today);
         const creditAmount = Math.random() * (creditLimit * 0.1) + 10; // 10% of credit limit max
         
         transactions.push({
@@ -86,13 +115,17 @@ export const generateTransactionHistory = (
           amount: -creditAmount,
           description: getRandomCreditCardTransaction(),
           category: 'Credit Card',
-          transactionDate: creditDate,
+          transactionDate: finalCreditDate,
           status: 'completed'
         });
       }
 
       // Monthly credit card payment from checking
-      const paymentDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 25), today);
+      // Random day between 20-28 of the month, random time
+      const paymentDay = Math.floor(Math.random() * 9) + 20; // 20-28
+      const paymentDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), paymentDay);
+      paymentDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 5 PM
+      const finalPaymentDate = ensurePastDate(paymentDate, today);
       const paymentAmount = Math.random() * (creditLimit * 0.3) + (creditLimit * 0.1); // 10-40% of credit limit
       transactions.push({
         userId,
@@ -101,15 +134,20 @@ export const generateTransactionHistory = (
         amount: -paymentAmount,
         description: 'Credit Card Payment',
         category: 'Credit Card Payment',
-              transactionDate: paymentDate,
-      status: 'completed'
-    });
+        transactionDate: finalPaymentDate,
+        status: 'completed'
+      });
     }
 
     // Grocery transactions (weekly or bi-weekly) - scaled by balance
     const groceryFrequency = transactionRules.groceryFrequency === 'weekly' ? 4 : 2;
     for (let week = 0; week < groceryFrequency; week++) {
-      const groceryDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (week * 7)), today);
+      // Random day within each week, random time
+      const weekStartDay = 1 + (week * 7);
+      const groceryDay = weekStartDay + Math.floor(Math.random() * 6); // Random day within the week
+      const groceryDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), groceryDay);
+      groceryDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0); // 8 AM - 8 PM
+      const finalGroceryDate = ensurePastDate(groceryDate, today);
       const baseGroceryAmount = Math.random() * 
         (transactionRules.groceryAmount.max - transactionRules.groceryAmount.min) + 
         transactionRules.groceryAmount.min;
@@ -122,7 +160,7 @@ export const generateTransactionHistory = (
         amount: -groceryAmount, // Negative for spending
         description: getRandomGroceryStore(),
         category: 'Food & Groceries',
-        transactionDate: groceryDate,
+        transactionDate: finalGroceryDate,
         status: 'completed'
       });
     }
@@ -130,7 +168,11 @@ export const generateTransactionHistory = (
     // Gas transactions (2-3 times per month) - scaled by balance
     const gasCount = Math.floor(Math.random() * 2) + 2;
     for (let i = 0; i < gasCount; i++) {
-      const gasDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 5 + (i * 10)), today);
+      // Random day throughout the month, random time
+      const gasDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const gasDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), gasDay);
+      gasDate.setHours(Math.floor(Math.random() * 18) + 5, Math.floor(Math.random() * 60), 0, 0); // 5 AM - 11 PM
+      const finalGasDate = ensurePastDate(gasDate, today);
       const baseGasAmount = Math.random() * 
         (transactionRules.gasAmount.max - transactionRules.gasAmount.min) + 
         transactionRules.gasAmount.min;
@@ -143,7 +185,7 @@ export const generateTransactionHistory = (
         amount: -gasAmount,
         description: getRandomGasStation(),
         category: 'Transportation',
-        transactionDate: gasDate,
+        transactionDate: finalGasDate,
         status: 'completed'
       });
     }
@@ -151,7 +193,11 @@ export const generateTransactionHistory = (
     // Restaurant transactions (1-3 times per month) - scaled by balance
     const restaurantCount = Math.floor(Math.random() * 3) + 1;
     for (let i = 0; i < restaurantCount; i++) {
-      const restaurantDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 8 + (i * 8)), today);
+      // Random day throughout the month, random time (more likely evening)
+      const restaurantDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const restaurantDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), restaurantDay);
+      restaurantDate.setHours(Math.floor(Math.random() * 6) + 17, Math.floor(Math.random() * 60), 0, 0); // 5 PM - 11 PM
+      const finalRestaurantDate = ensurePastDate(restaurantDate, today);
       const baseRestaurantAmount = Math.random() * 
         (transactionRules.restaurantAmount.max - transactionRules.restaurantAmount.min) + 
         transactionRules.restaurantAmount.min;
@@ -164,7 +210,7 @@ export const generateTransactionHistory = (
         amount: -restaurantAmount,
         description: getRandomRestaurant(),
         category: 'Dining',
-        transactionDate: restaurantDate,
+        transactionDate: finalRestaurantDate,
         status: 'completed'
       });
     }
@@ -172,7 +218,11 @@ export const generateTransactionHistory = (
     // Online purchases (1-2 times per month) - scaled by balance
     const onlineCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < onlineCount; i++) {
-      const onlineDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 12 + (i * 15)), today);
+      // Random day throughout the month, random time
+      const onlineDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const onlineDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), onlineDay);
+      onlineDate.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), 0, 0); // Any time of day
+      const finalOnlineDate = ensurePastDate(onlineDate, today);
       const baseOnlineAmount = Math.random() * 
         (transactionRules.onlineAmount.max - transactionRules.onlineAmount.min) + 
         transactionRules.onlineAmount.min;
@@ -185,7 +235,7 @@ export const generateTransactionHistory = (
         amount: -onlineAmount,
         description: getRandomOnlineStore(),
         category: 'Shopping',
-        transactionDate: onlineDate,
+        transactionDate: finalOnlineDate,
         status: 'completed'
       });
     }
@@ -193,7 +243,11 @@ export const generateTransactionHistory = (
     // ATM withdrawals (1-2 times per month) - scaled by balance
     const atmCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < atmCount; i++) {
-      const atmDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 20 + (i * 5)), today);
+      // Random day throughout the month, random time
+      const atmDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const atmDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), atmDay);
+      atmDate.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), 0, 0); // Any time
+      const finalAtmDate = ensurePastDate(atmDate, today);
       const baseAtmAmount = Math.floor(Math.random() * 200) + 40; // $40-$240
       const atmAmount = baseAtmAmount * balanceMultiplier;
       
@@ -204,7 +258,7 @@ export const generateTransactionHistory = (
         amount: -atmAmount,
         description: 'ATM Withdrawal',
         category: 'Cash',
-        transactionDate: atmDate,
+        transactionDate: finalAtmDate,
         status: 'completed'
       });
     }
@@ -212,7 +266,11 @@ export const generateTransactionHistory = (
     // Donation transactions (1-2 times per month) - scaled by balance
     const donationCount = Math.floor(Math.random() * 2) + 1;
     for (let i = 0; i < donationCount; i++) {
-      const donationDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 15 + (i * 10)), today);
+      // Random day throughout the month, random time
+      const donationDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const donationDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), donationDay);
+      donationDate.setHours(Math.floor(Math.random() * 12) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 9 PM
+      const finalDonationDate = ensurePastDate(donationDate, today);
       const baseDonationAmount = Math.random() * 200 + 25; // $25-$225
       const donationAmount = baseDonationAmount * balanceMultiplier;
       
@@ -223,14 +281,18 @@ export const generateTransactionHistory = (
         amount: -donationAmount,
         description: getRandomDonation(),
         category: 'Charity',
-        transactionDate: donationDate,
+        transactionDate: finalDonationDate,
         status: 'completed'
       });
     }
 
     // Monthly fees (if balance is low)
     if (totalBalance < 1000) {
-      const feeDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 28), today);
+      // Random day between 25-28 of the month, random time
+      const feeDay = Math.floor(Math.random() * 4) + 25; // 25-28
+      const feeDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), feeDay);
+      feeDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 5 PM
+      const finalFeeDate = ensurePastDate(feeDate, today);
       transactions.push({
         userId,
         accountId: 'checking',
@@ -238,13 +300,17 @@ export const generateTransactionHistory = (
         amount: -12.99,
         description: 'Monthly Maintenance Fee',
         category: 'Banking',
-        transactionDate: feeDate,
+        transactionDate: finalFeeDate,
         status: 'completed'
       });
     }
 
     // Savings transfers (monthly)
-    const savingsDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 25), today);
+    // Random day between 20-28 of the month, random time
+    const savingsDay = Math.floor(Math.random() * 9) + 20; // 20-28
+    const savingsDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), savingsDay);
+    savingsDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 5 PM
+    const finalSavingsDate = ensurePastDate(savingsDate, today);
     const savingsAmount = Math.floor(transactionRules.salaryAmount * 0.1); // 10% of salary
     
     transactions.push({
@@ -254,7 +320,7 @@ export const generateTransactionHistory = (
       amount: -savingsAmount,
       description: 'Transfer to Savings',
       category: 'Transfer',
-      transactionDate: savingsDate,
+      transactionDate: finalSavingsDate,
       status: 'completed'
     });
 
@@ -266,12 +332,16 @@ export const generateTransactionHistory = (
       amount: savingsAmount,
       description: 'Transfer from Checking',
       category: 'Transfer',
-      transactionDate: savingsDate,
+      transactionDate: finalSavingsDate,
       status: 'completed'
     });
 
     // Interest earned on savings (monthly) - using a fixed amount for simplicity
-    const savingsInterestDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1), today);
+    // Random day between 1-5 of the month, random time
+    const savingsInterestDay = Math.floor(Math.random() * 5) + 1; // 1-5
+    const savingsInterestDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), savingsInterestDay);
+    savingsInterestDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0); // 9 AM - 5 PM
+    const finalSavingsInterestDate = ensurePastDate(savingsInterestDate, today);
     const savingsInterestAmount = Math.random() * 50 + 10; // $10-60 interest
     
     transactions.push({
@@ -281,14 +351,18 @@ export const generateTransactionHistory = (
       amount: savingsInterestAmount,
       description: 'Interest Earned',
       category: 'Interest',
-      transactionDate: savingsInterestDate,
+      transactionDate: finalSavingsInterestDate,
       status: 'completed'
     });
 
     // Additional checking account transactions (more variety) - scaled by balance
     const additionalCheckingTransactions = Math.floor(Math.random() * 8) + 5; // 5-12 additional transactions
     for (let i = 0; i < additionalCheckingTransactions; i++) {
-      const additionalDate = ensurePastDate(new Date(monthDate.getFullYear(), monthDate.getMonth(), 1 + (i * 3)), today);
+      // Random day throughout the month, random time
+      const additionalDay = Math.floor(Math.random() * 28) + 1; // 1-28
+      const additionalDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), additionalDay);
+      additionalDate.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), 0, 0); // Any time
+      const finalAdditionalDate = ensurePastDate(additionalDate, today);
       const baseAdditionalAmount = Math.random() * 150 + 25; // $25-$175
       const additionalAmount = baseAdditionalAmount * balanceMultiplier;
       
@@ -299,7 +373,7 @@ export const generateTransactionHistory = (
         amount: -additionalAmount,
         description: getRandomCheckingTransaction(),
         category: getRandomCategory(),
-        transactionDate: additionalDate,
+        transactionDate: finalAdditionalDate,
         status: 'completed'
       });
     }
@@ -424,7 +498,8 @@ const getRandomCheckingTransaction = () => {
     'Dry Cleaner - Local Cleaners',
     'Car Wash - Local Car Wash',
     'Hair Salon - Local Salon',
-    'Nail Salon - Local Nails'
+    'Pharmacy - CVS',
+    'Coffee Shop - Local Brew'
   ];
   return transactions[Math.floor(Math.random() * transactions.length)];
 };

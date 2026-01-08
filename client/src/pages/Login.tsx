@@ -31,6 +31,15 @@ export default function Login() {
     }
   };
 
+  // Don't auto-clear error - let user dismiss it manually or it clears on new submission
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUsername(e.target.value);
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
@@ -68,7 +77,7 @@ export default function Login() {
                   type="text"
                   required
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={handleUsernameChange}
                   className="input pl-10"
                   placeholder="Enter your username"
                   disabled={loading}
@@ -91,7 +100,7 @@ export default function Login() {
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handlePasswordChange}
                   className="input pl-10 pr-10"
                   placeholder="Enter your password"
                   disabled={loading}
@@ -113,8 +122,20 @@ export default function Login() {
 
             {/* Error Message */}
             {error && (
-              <div className="bg-error-50 border border-error-200 rounded-lg p-3">
-                <p className="text-sm text-error-600">{error}</p>
+              <div className="bg-error-50 border border-error-200 rounded-lg p-3 animate-in fade-in duration-300">
+                <div className="flex items-start justify-between">
+                  <p className="text-sm text-error-600 flex-1">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => setError('')}
+                    className="ml-2 text-error-400 hover:text-error-600 transition-colors"
+                    aria-label="Dismiss error"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             )}
 
