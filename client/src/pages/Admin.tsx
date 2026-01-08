@@ -50,6 +50,8 @@ interface User {
   phoneNumber?: string;
   username: string;
   email: string;
+  isActive?: boolean;
+  isAdmin?: boolean;
   account?: {
     totalBalance: number;
     accountDistribution: {
@@ -161,6 +163,7 @@ export default function Admin() {
   const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
   const [loadingPendingTransactions, setLoadingPendingTransactions] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [updatingAccountStatus, setUpdatingAccountStatus] = useState<string | null>(null);
 
   // Edit User State
   const [editUserSearch, setEditUserSearch] = useState('');
@@ -417,6 +420,66 @@ export default function Admin() {
       setPendingTransactions([]);
     } finally {
       setLoadingPendingTransactions(false);
+    }
+  };
+
+  const toggleAccountStatus = async (userId: string, currentStatus: boolean) => {
+    if (!adminPassword) return;
+
+    setUpdatingAccountStatus(userId);
+    try {
+      const response = await fetch(`${getApiUrl()}/admin/toggle-account-status/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        },
+        body: JSON.stringify({ isActive: !currentStatus })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setToast({
+          type: 'success',
+          message: `Account ${!currentStatus ? 'activated' : 'deactivated'} successfully`
+        });
+        
+        // Refresh users list
+        const usersResponse = await fetch(`${getApiUrl()}/admin/users`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Password': adminPassword
+          }
+        });
+        
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.users);
+          setFilteredUsers(usersData.users);
+          
+          // Update selected user if it's the same user
+          if (selectedUser && selectedUser._id === userId) {
+            const updatedUser = usersData.users.find((u: User) => u._id === userId);
+            if (updatedUser) {
+              setSelectedUser(updatedUser);
+            }
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        setToast({
+          type: 'error',
+          message: errorData.message || 'Failed to update account status'
+        });
+      }
+    } catch (error: any) {
+      setToast({
+        type: 'error',
+        message: 'Failed to update account status. Please try again.'
+      });
+    } finally {
+      setUpdatingAccountStatus(null);
     }
   };
 
@@ -1267,25 +1330,69 @@ export default function Admin() {
                   {selectedUser && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-blue-900">
-                            {selectedUser.firstName} {selectedUser.lastName}
-                          </h4>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <h4 className="font-semibold text-blue-900">
+                              {selectedUser.firstName} {selectedUser.lastName}
+                            </h4>
+                            {selectedUser.isAdmin && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                Admin
+                              </span>
+                            )}
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              selectedUser.isActive !== false 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {selectedUser.isActive !== false ? 'Active' : 'Deactivated'}
+                            </span>
+                          </div>
                           <p className="text-sm text-blue-700">@{selectedUser.username}</p>
                           <p className="text-sm text-blue-600">
                             Total Balance: ${selectedUser.account?.totalBalance?.toFixed(2) || '0.00'}
                           </p>
                         </div>
-                        <button
-                          onClick={() => {
-                            setSelectedUser(null);
-                            setCreditForm(prev => ({ ...prev, userId: '' }));
-                            setDebitForm(prev => ({ ...prev, userId: '' }));
-                          }}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          <XCircle className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          {!selectedUser.isAdmin && (
+                            <button
+                              onClick={() => toggleAccountStatus(selectedUser._id, selectedUser.isActive !== false)}
+                              disabled={updatingAccountStatus === selectedUser._id}
+                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center ${
+                                selectedUser.isActive !== false
+                                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                                  : 'bg-green-600 hover:bg-green-700 text-white'
+                              }`}
+                            >
+                              {updatingAccountStatus === selectedUser._id ? (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                  Updating...
+                                </>
+                              ) : selectedUser.isActive !== false ? (
+                                <>
+                                  <XCircle className="w-3 h-3 mr-1" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Activate
+                                </>
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedUser(null);
+                              setCreditForm(prev => ({ ...prev, userId: '' }));
+                              setDebitForm(prev => ({ ...prev, userId: '' }));
+                            }}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1300,10 +1407,24 @@ export default function Admin() {
                           className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                         >
                           <div className="flex justify-between items-center">
-                            <div>
-                              <h4 className="font-medium text-gray-900">
-                                {user.firstName} {user.lastName}
-                              </h4>
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <h4 className="font-medium text-gray-900">
+                                  {user.firstName} {user.lastName}
+                                </h4>
+                                {user.isAdmin && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                    Admin
+                                  </span>
+                                )}
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                                  user.isActive !== false 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {user.isActive !== false ? 'Active' : 'Inactive'}
+                                </span>
+                              </div>
                               <p className="text-sm text-gray-600">@{user.username}</p>
                             </div>
                             <div className="text-right">

@@ -37,6 +37,14 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    // Check if account is active
+    if (user.isActive === false) {
+      return res.status(403).json({
+        error: 'Account deactivated',
+        message: 'Your account has been deactivated. Please contact support for assistance.'
+      });
+    }
+
     // Generate JWT token
     const token = generateToken((user._id as any).toString());
 
@@ -50,6 +58,7 @@ router.post('/login', async (req: Request, res: Response) => {
       username: user.username,
       profilePicture: user.profilePicture,
       isAdmin: user.isAdmin,
+      isActive: user.isActive,
       createdAt: user.createdAt
     };
 
@@ -112,6 +121,7 @@ router.get('/me', async (req: Request, res: Response) => {
       username: user.username,
       profilePicture: user.profilePicture,
       isAdmin: user.isAdmin,
+      isActive: user.isActive,
       createdAt: user.createdAt
     };
 

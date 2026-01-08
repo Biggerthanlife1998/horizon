@@ -11,6 +11,7 @@ export interface IUser extends Document {
   password: string;
   profilePicture?: string;
   isAdmin: boolean;
+  isActive: boolean;
   transferPin: string;
   securityQuestion: string;
   securityAnswer: string;
@@ -70,6 +71,11 @@ const userSchema = new Schema<IUser>({
   isAdmin: {
     type: Boolean,
     default: false
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true
   },
   transferPin: {
     type: String,

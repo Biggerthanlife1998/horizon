@@ -1199,6 +1199,71 @@ router.put('/reset-password/:userId', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/admin/toggle-account-status/:userId - Toggle account active status
+router.put('/toggle-account-status/:userId', async (req: Request, res: Response) => {
+  try {
+    // Verify admin password
+    const adminPassword = req.headers['x-admin-password'];
+    if (!adminPassword || adminPassword.toString().trim() !== process.env.ADMIN_PASSWORD?.trim()) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid admin password'
+      });
+    }
+
+    const { userId } = req.params;
+    const { isActive } = req.body;
+
+    // Validate isActive
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({
+        error: 'Invalid status',
+        message: 'isActive must be a boolean value'
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User with the specified ID does not exist'
+      });
+    }
+
+    // Prevent deactivating admin accounts (optional safety check)
+    if (user.isAdmin && !isActive) {
+      return res.status(400).json({
+        error: 'Cannot deactivate admin',
+        message: 'Admin accounts cannot be deactivated'
+      });
+    }
+
+    // Update account status
+    user.isActive = isActive;
+    await user.save();
+
+    res.json({
+      message: `Account ${isActive ? 'activated' : 'deactivated'} successfully`,
+      user: {
+        id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isActive: user.isActive,
+        isAdmin: user.isAdmin
+      }
+    });
+
+  } catch (error) {
+    console.error('Toggle account status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to update account status'
+    });
+  }
+});
+
 export default router;
 
 
