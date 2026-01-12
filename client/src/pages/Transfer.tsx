@@ -13,7 +13,10 @@ import {
   Clock,
   X,
   ArrowRight,
-  Edit
+  Edit,
+  AlertCircle,
+  Shield,
+  Lock
 } from 'lucide-react';
 import FormInput from '@/components/FormInput';
 import LoadingButton from '@/components/LoadingButton';
@@ -113,20 +116,19 @@ export default function Transfer() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [form, setForm] = useState({
     fromAccount: '',
-    recipientName: '',
-    recipientAccountNumber: '',
-    recipientBankName: '',
+    bankName: '',
+    accountNumber: '',
+    routingNumber: '',
+    accountHolderName: '',
     amount: '',
-    note: '',
-    kind: 'internal' as 'internal' | 'external' | 'international',
-    swiftCode: '',
-    transferPin: '',
-    transferSpeed: 'next-day', // Default to next business day
-    saveRecipient: false // Option to save recipient
+    description: ''
   });
   const [loading, setLoading] = useState(false);
-  const [showReceipt, setShowReceipt] = useState(false);
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [amlCode, setAmlCode] = useState('');
+  const [amlCodeError, setAmlCodeError] = useState('');
   
   
   // Scheduled transfer confirmation state
@@ -543,103 +545,90 @@ export default function Transfer() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setForm(prev => ({ ...prev, [name]: value }));
+  // Format amount with $ and commas
+  const formatAmount = (value: string): string => {
+    // Remove all non-digit characters except decimal point
+    const numericValue = value.replace(/[^\d.]/g, '');
+    
+    // Split by decimal point
+    const parts = numericValue.split('.');
+    const integerPart = parts[0];
+    const decimalPart = parts[1];
+    
+    // Add commas to integer part
+    const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    
+    // Combine with decimal if exists (limit to 2 decimal places)
+    let formatted = formattedInteger;
+    if (decimalPart !== undefined) {
+      formatted += '.' + decimalPart.slice(0, 2);
+    }
+    
+    return formatted;
   };
 
+  // Parse formatted amount to number
+  const parseAmount = (formattedValue: string): number => {
+    const numericValue = formattedValue.replace(/[^\d.]/g, '');
+    return parseFloat(numericValue) || 0;
+  };
 
-  // Process the actual transfer
-  const processTransfer = async (transferData: any) => {
-    setLoading(true);
-
-    try {
-      // Validate account type for transfers (credit cards are already filtered out in the dropdown)
-      const selectedAccount = accounts.find(acc => acc.id === transferData.fromAccountId);
-      if (selectedAccount?.type === 'credit') {
-        alert('Cannot transfer from credit card accounts. Please select a checking or savings account.');
-        setLoading(false);
-        return;
-      }
-
-      // Make real API call
-      const response = await api.post('/user/transfer', transferData);
-
-      if (response.data.success) {
-        // Use real receipt data from API
-        const selectedSpeed = transferSpeedOptions.find(opt => opt.id === transferData.transferSpeed);
-        const receipt: ReceiptData = {
-          confirmationCode: response.data.receipt.confirmationCode,
-          amount: response.data.receipt.amount,
-          fromAccount: response.data.receipt.fromAccount,
-          fromAccountType: response.data.receipt.fromAccountType,
-          toName: response.data.receipt.toName,
-          toAccountNumber: response.data.receipt.toAccountNumber,
-          toBankName: response.data.receipt.toBankName,
-          swiftCode: response.data.receipt.swiftCode,
-          dateTime: response.data.receipt.dateTime,
-          note: response.data.receipt.note,
-          transferSpeed: selectedSpeed?.name || 'Standard Transfer',
-          expectedCompletion: selectedSpeed?.estimatedTime || '2-3 business days',
-          fee: selectedSpeed?.fee || 0
-        };
-
-        setReceiptData(receipt);
-        setShowReceipt(true);
-        
-        // Reset form
-        setForm({
-          fromAccount: '',
-          recipientName: '',
-          recipientAccountNumber: '',
-          recipientBankName: '',
-          amount: '',
-          note: '',
-          kind: 'internal',
-          swiftCode: '',
-          transferPin: '',
-          transferSpeed: 'next-day',
-          saveRecipient: false
-        });
-
-        // Refresh accounts to show updated balances
-        const accountsResponse = await api.get('/user/accounts');
-        setAccounts(accountsResponse.data.accounts);
-
-        // Refresh saved recipients if a recipient was saved
-        if (transferData.saveRecipient) {
-          fetchSavedRecipients();
-        }
-      }
-
-    } catch (error: any) {
-      console.error('Transfer failed:', error);
-      const errorMessage = error.response?.data?.message || 'Transfer failed. Please try again.';
-      alert(errorMessage);
-    } finally {
-      setLoading(false);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'amount') {
+      // Format amount with $ and commas
+      const formatted = formatAmount(value);
+      setForm(prev => ({ ...prev, [name]: formatted }));
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle Send button - show preview
+  const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    const transferAmount = parseFloat(form.amount);
+    
+    // Validate required fields
+    if (!form.fromAccount || !form.bankName || !form.accountNumber || !form.routingNumber || !form.accountHolderName || !form.amount) {
+      alert('Please fill in all required fields');
+      return;
+    }
 
-    // Process transfer
-    await processTransfer({
-      fromAccountId: form.fromAccount,
-      recipientName: form.recipientName,
-      recipientAccountNumber: form.recipientAccountNumber,
-      recipientBankName: form.recipientBankName,
-      amount: transferAmount,
-      note: form.note,
-      kind: form.kind,
-      swiftCode: form.kind === 'international' ? form.swiftCode : '',
-      transferSpeed: form.transferSpeed,
-      transferPin: form.transferPin,
-      saveRecipient: form.saveRecipient
+    // Validate amount
+    const amount = parseAmount(form.amount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    // Get selected account details
+    const selectedAccount = accounts.find(acc => acc.id === form.fromAccount);
+    
+    // Set preview data
+    setPreviewData({
+      fromAccount: selectedAccount?.name || '',
+      fromAccountType: selectedAccount?.type || '',
+      bankName: form.bankName,
+      accountHolderName: form.accountHolderName,
+      accountNumber: form.accountNumber,
+      routingNumber: form.routingNumber,
+      amount: amount,
+      formattedAmount: `$${formatAmount(form.amount)}`,
+      description: form.description
     });
+
+    // Show preview modal
+    setShowPreview(true);
   };
+
+  // Handle Submit in preview - show error
+  const handlePreviewSubmit = () => {
+    setShowPreview(false);
+    setShowError(true);
+  };
+
+
 
 
   const handleDownloadReceipt = async () => {
@@ -737,7 +726,7 @@ export default function Transfer() {
       {/* Transfer Form */}
       {activeTab === 'transfer' && (
       <div className="card max-w-2xl">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSend} className="space-y-6">
           {/* From Account */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -759,275 +748,84 @@ export default function Transfer() {
             </select>
           </div>
 
-          {/* Saved Recipients */}
-          {recipientsLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
-              <span className="ml-2 text-sm text-gray-600">Loading recipients...</span>
-            </div>
-          ) : savedRecipients.length > 0 ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Quick Select from Saved Recipients
-              </label>
-              <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto">
-                {savedRecipients.map((recipient) => (
-                  <div
-                    key={recipient.id}
-                    className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-gray-50 transition-colors"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setForm(prev => ({
-                          ...prev,
-                          recipientName: recipient.name,
-                          recipientAccountNumber: recipient.accountNumber.replace('****', ''),
-                          recipientBankName: recipient.bankName || ''
-                        }));
-                      }}
-                      className="flex-1 text-left"
-                    >
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-medium text-gray-900">{recipient.name}</span>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            recipient.category === 'personal' ? 'bg-blue-100 text-blue-700' :
-                            recipient.category === 'family' ? 'bg-green-100 text-green-700' :
-                            recipient.category === 'business' ? 'bg-purple-100 text-purple-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {recipient.category}
-                          </span>
-                          {recipient.isVerified && (
-                            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                              Verified
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-gray-600">{recipient.accountNumber}</p>
-                        {recipient.bankName && (
-                          <p className="text-xs text-gray-500">{recipient.bankName}</p>
-                        )}
-                        <p className="text-xs text-gray-500">
-                          Last used: {new Date(recipient.lastUsed).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </button>
-                    <div className="flex space-x-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          editSavedRecipient(recipient);
-                        }}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit recipient"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSavedRecipient(recipient.id);
-                        }}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete recipient"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {/* Recipient Name */}
+          {/* Bank Name */}
           <FormInput
-            label="Recipient Name *"
-            name="recipientName"
-            value={form.recipientName}
+            label="Bank Name *"
+            name="bankName"
+            value={form.bankName}
             onChange={handleInputChange}
-            placeholder="Enter recipient's full name"
+            placeholder="Enter bank name (e.g., Chase, Bank of America)"
             required
           />
 
-          {/* Recipient Account Number */}
+          {/* Account Number */}
           <FormInput
-            label="Recipient Account Number *"
-            name="recipientAccountNumber"
-            value={form.recipientAccountNumber}
+            label="Account Number *"
+            name="accountNumber"
+            value={form.accountNumber}
             onChange={handleInputChange}
-            placeholder="Enter recipient's account number"
+            placeholder="Enter account number"
             required
           />
 
-          {/* Recipient Bank Name */}
+          {/* Routing Number */}
           <FormInput
-            label="Recipient Bank Name (Optional)"
-            name="recipientBankName"
-            value={form.recipientBankName}
+            label="Routing Number *"
+            name="routingNumber"
+            value={form.routingNumber}
             onChange={handleInputChange}
-            placeholder="Enter recipient's bank name (e.g., Chase, Bank of America)"
+            placeholder="Enter routing number"
+            required
+          />
+
+          {/* Account Holder Name */}
+          <FormInput
+            label="Account Holder Name *"
+            name="accountHolderName"
+            value={form.accountHolderName}
+            onChange={handleInputChange}
+            placeholder="Enter account holder's full name"
+            required
           />
 
           {/* Amount */}
           <div>
-            <FormInput
-              label="Amount *"
-              name="amount"
-              type="number"
-              value={form.amount}
-              onChange={handleInputChange}
-              placeholder="0.00"
-              step="0.01"
-              min="0.01"
-              required
-            />
-          </div>
-
-          {/* Transfer Speed */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Transfer Speed *
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Amount *
             </label>
-            <div className="space-y-3">
-              {transferSpeedOptions.map((option) => {
-                const isSelected = form.transferSpeed === option.id;
-                const isDisabled = !option.available;
-                
-                return (
-                  <div
-                    key={option.id}
-                    className={`relative border rounded-lg p-4 cursor-pointer transition-all ${
-                      isSelected
-                        ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-200'
-                        : isDisabled
-                        ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
-                        : 'border-gray-300 hover:border-primary-300 hover:bg-gray-50'
-                    }`}
-                    onClick={() => !isDisabled && handleInputChange({ target: { name: 'transferSpeed', value: option.id } } as any)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-4 h-4 rounded-full border-2 ${
-                          isSelected ? 'border-primary-500 bg-primary-500' : 'border-gray-300'
-                        }`}>
-                          {isSelected && (
-                            <div className="w-2 h-2 bg-white rounded-full mx-auto mt-0.5"></div>
-                          )}
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium text-gray-900">{option.name}</span>
-                            {option.fee === 0 && (
-                              <span className="px-2 py-1 text-xs font-medium text-success-700 bg-success-100 rounded-full">
-                                No Fee
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">{option.description}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-medium text-gray-900">
-                          {option.fee === 0 ? 'Free' : formatUSD(option.fee)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-medium">$</span>
+              <input
+                name="amount"
+                type="text"
+                value={form.amount}
+                onChange={handleInputChange}
+                placeholder="0.00"
+                required
+                className="input pl-8"
+                inputMode="decimal"
+              />
             </div>
-            {form.transferSpeed && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span className="text-sm text-blue-700">
-                    {transferSpeedOptions.find(opt => opt.id === form.transferSpeed)?.estimatedTime}
-                  </span>
-                </div>
-              </div>
-            )}
+            <p className="mt-1 text-xs text-gray-500">Enter amount (e.g., 1,000 or 10,000)</p>
           </div>
 
-          {/* Note */}
+          {/* Description */}
           <FormInput
-            label="Note (Optional)"
-            name="note"
-            value={form.note}
+            label="Description (Optional)"
+            name="description"
+            value={form.description}
             onChange={handleInputChange}
-            placeholder="Add a note for this transfer"
+            placeholder="Add a description for this transfer"
             type="textarea"
           />
 
-          {/* Save Recipient Option */}
-          <div className="flex items-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <input
-              type="checkbox"
-              id="saveRecipient"
-              name="saveRecipient"
-              checked={form.saveRecipient}
-              onChange={(e) => setForm(prev => ({ ...prev, saveRecipient: e.target.checked }))}
-              className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 focus:ring-2"
-            />
-            <label htmlFor="saveRecipient" className="text-sm font-medium text-blue-900">
-              Save this recipient for future transfers
-            </label>
-          </div>
-
-          {/* Transfer Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Transfer Type *
-            </label>
-            <select
-              name="kind"
-              value={form.kind}
-              onChange={handleInputChange}
-              required
-              className="input"
-            >
-              <option value="internal">Internal Transfer (Same Bank)</option>
-              <option value="external">External Transfer (Other Banks)</option>
-              <option value="international">International Transfer (SWIFT)</option>
-            </select>
-          </div>
-
-          {/* SWIFT Code (International Only) */}
-          {form.kind === 'international' && (
-            <FormInput
-              label="SWIFT Code *"
-              name="swiftCode"
-              value={form.swiftCode}
-              onChange={handleInputChange}
-              placeholder="Enter SWIFT/BIC code"
-              required
-            />
-          )}
-
-          {/* Transfer PIN */}
-          <FormInput
-            label="Transfer PIN *"
-            name="transferPin"
-            type="password"
-            value={form.transferPin}
-            onChange={handleInputChange}
-            placeholder="Enter your 4-digit transfer PIN"
-            maxLength={4}
-            pattern="[0-9]{4}"
-            required
-          />
-
-          {/* Submit Button */}
+          {/* Send Button */}
           <LoadingButton
             type="submit"
             loading={loading}
             className="w-full"
           >
-            {loading ? 'Processing Transfer...' : 'Send Money'}
+            {loading ? 'Processing...' : 'Send'}
           </LoadingButton>
         </form>
       </div>
@@ -1902,99 +1700,66 @@ export default function Transfer() {
         )}
       </Modal>
 
-      {/* Receipt Modal */}
+      {/* Preview Modal */}
       <Modal
-        isOpen={showReceipt}
-        onClose={() => setShowReceipt(false)}
-        title="Transfer Receipt"
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        title="Review Transfer Details"
       >
-        {receiptData && (
+        {previewData && (
           <div className="space-y-6">
-            {/* Receipt Header */}
+            {/* Preview Header */}
             <div className="text-center border-b border-gray-200 pb-4">
               <Receipt className="w-12 h-12 text-primary-600 mx-auto mb-2" />
-              <h3 className="text-lg font-semibold text-gray-900">Transfer Successful</h3>
-              <p className="text-sm text-gray-600">Your money has been sent successfully</p>
+              <h3 className="text-lg font-semibold text-gray-900">Please Review Your Transfer</h3>
+              <p className="text-sm text-gray-600">Verify all details before submitting</p>
             </div>
 
-            {/* Receipt Details */}
+            {/* Preview Details */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Confirmation Code:</span>
-                <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                  {receiptData.confirmationCode}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Amount:</span>
-                <span className="text-lg font-bold text-gray-900">
-                  {formatUSD(receiptData.amount)}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Transfer Speed:</span>
-                <span className="text-sm text-gray-900">{receiptData.transferSpeed}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Expected Completion:</span>
-                <span className="text-sm text-gray-900">{receiptData.expectedCompletion}</span>
-              </div>
-
-              {receiptData.fee > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Transfer Fee:</span>
-                  <span className="text-sm text-gray-900">{formatUSD(receiptData.fee)}</span>
-                </div>
-              )}
-
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-gray-600">From Account:</span>
                 <span className="text-sm text-gray-900">
-                  ****{receiptData.fromAccount.slice(-4)} ({receiptData.fromAccountType})
+                  {previewData.fromAccount} ({previewData.fromAccountType})
                 </span>
               </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">To:</span>
-                <span className="text-sm text-gray-900">{receiptData.toName}</span>
+                <span className="text-sm font-medium text-gray-600">Bank Name:</span>
+                <span className="text-sm text-gray-900">{previewData.bankName}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-600">Account Holder Name:</span>
+                <span className="text-sm text-gray-900">{previewData.accountHolderName}</span>
               </div>
 
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-gray-600">Account Number:</span>
                 <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                  {receiptData.toAccountNumber}
+                  ****{previewData.accountNumber.slice(-4)}
                 </span>
               </div>
 
-              {receiptData.toBankName && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">Bank Name:</span>
-                  <span className="text-sm text-gray-900">{receiptData.toBankName}</span>
-                </div>
-              )}
-
-              {receiptData.swiftCode && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-600">SWIFT Code:</span>
-                  <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
-                    {receiptData.swiftCode}
-                  </span>
-                </div>
-              )}
-
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-600">Date & Time:</span>
-                <span className="text-sm text-gray-900">{receiptData.dateTime}</span>
+                <span className="text-sm font-medium text-gray-600">Routing Number:</span>
+                <span className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                  ****{previewData.routingNumber.slice(-4)}
+                </span>
               </div>
 
-              {receiptData.note && (
+              <div className="flex justify-between items-center border-t border-gray-200 pt-4">
+                <span className="text-sm font-medium text-gray-600">Amount:</span>
+                <span className="text-lg font-bold text-gray-900">
+                  {previewData.formattedAmount}
+                </span>
+              </div>
+
+              {previewData.description && (
                 <div className="flex justify-between items-start">
-                  <span className="text-sm font-medium text-gray-600">Note:</span>
+                  <span className="text-sm font-medium text-gray-600">Description:</span>
                   <span className="text-sm text-gray-900 text-right max-w-xs">
-                    {receiptData.note}
+                    {previewData.description}
                   </span>
                 </div>
               )}
@@ -2003,21 +1768,141 @@ export default function Transfer() {
             {/* Action Buttons */}
             <div className="flex space-x-3 pt-4 border-t border-gray-200">
               <button
-                onClick={handleDownloadReceipt}
-                className="btn-secondary flex-1 flex items-center justify-center space-x-2"
+                onClick={() => setShowPreview(false)}
+                className="btn-secondary flex-1"
               >
-                <Download className="w-4 h-4" />
-                <span>Download Receipt (PDF)</span>
+                Cancel
               </button>
               <button
-                onClick={() => setShowReceipt(false)}
+                onClick={handlePreviewSubmit}
                 className="btn-primary flex-1"
               >
-                Done
+                Submit
               </button>
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* AML Code Requirement Modal */}
+      <Modal
+        isOpen={showError}
+        onClose={() => {
+          setShowError(false);
+          setAmlCode('');
+          setAmlCodeError('');
+          // Reset form after closing error
+          setForm({
+            fromAccount: '',
+            bankName: '',
+            accountNumber: '',
+            routingNumber: '',
+            accountHolderName: '',
+            amount: '',
+            description: ''
+          });
+        }}
+        title=""
+      >
+        <div className="space-y-6">
+          {/* Padlock Icon and Title */}
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+              <Lock className="w-8 h-8 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              AML Code is required
+            </h3>
+          </div>
+
+          {/* Body Text */}
+          <div className="text-center">
+            <p className="text-sm text-gray-700 leading-relaxed">
+              The Federal ANTI MONEY LAUNDERING (AML) code is required for this transaction to be completed successfully. You can visit any of our nearest branches or contact our online customer care representatives for more details regarding the AML code for this transaction.
+            </p>
+          </div>
+
+          {/* AML Code Input Field */}
+          <div>
+            <label htmlFor="amlCode" className="block text-sm font-medium text-gray-700 mb-2">
+              AML Code *
+            </label>
+            <input
+              id="amlCode"
+              name="amlCode"
+              type="text"
+              value={amlCode}
+              onChange={(e) => {
+                setAmlCode(e.target.value);
+                setAmlCodeError('');
+              }}
+              placeholder="Enter AML code"
+              required
+              className={`input ${amlCodeError ? 'border-red-500 focus:ring-red-500' : ''}`}
+            />
+            {amlCodeError && (
+              <p className="mt-1 text-sm text-red-600">{amlCodeError}</p>
+            )}
+          </div>
+
+          {/* Footer Text */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-xs text-blue-800 leading-relaxed">
+              We have security measures in place to safeguard your money because we are committed to providing you with a secure banking experience.
+            </p>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                // Validate AML code
+                if (!amlCode.trim()) {
+                  setAmlCodeError('AML code is required');
+                  return;
+                }
+                
+                // For now, just close the modal (no actual validation)
+                setShowError(false);
+                setAmlCode('');
+                setAmlCodeError('');
+                // Reset form after closing
+                setForm({
+                  fromAccount: '',
+                  bankName: '',
+                  accountNumber: '',
+                  routingNumber: '',
+                  accountHolderName: '',
+                  amount: '',
+                  description: ''
+                });
+              }}
+              className="btn-primary w-full"
+            >
+              Submit
+            </button>
+            <button
+              onClick={() => {
+                setShowError(false);
+                setAmlCode('');
+                setAmlCodeError('');
+                // Reset form after closing
+                setForm({
+                  fromAccount: '',
+                  bankName: '',
+                  accountNumber: '',
+                  routingNumber: '',
+                  accountHolderName: '',
+                  amount: '',
+                  description: ''
+                });
+              }}
+              className="btn-secondary w-full mt-3"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

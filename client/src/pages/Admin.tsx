@@ -16,6 +16,22 @@ interface CreateUserForm {
   includeTransactionHistory: boolean;
   isAdmin: boolean;
   profilePicture?: File;
+  // Custom mode fields
+  accountMode: 'default' | 'custom';
+  enableCreditCard: boolean;
+  customCreditLimit: number;
+  // Debit alert config
+  enableDebitAlerts: boolean;
+  debitAlertAmount: number;
+  debitAlertStartDate: string;
+  debitAlertMaxTransactions: number;
+  // Credit alert config
+  enableCreditAlerts: boolean;
+  creditAlertTotalAmount: number;
+  creditAlertTodayAmount: number;
+  creditAlertStartDate: string;
+  // Account creation date
+  accountCreationDate: string;
 }
 
 interface Toast {
@@ -127,6 +143,18 @@ export default function Admin() {
     creditLimit: 0,
     includeTransactionHistory: false,
     isAdmin: false,
+    accountMode: 'default',
+    enableCreditCard: true,
+    customCreditLimit: 0,
+    enableDebitAlerts: false,
+    debitAlertAmount: 0,
+    debitAlertStartDate: '',
+    debitAlertMaxTransactions: 1,
+    enableCreditAlerts: false,
+    creditAlertTotalAmount: 0,
+    creditAlertTodayAmount: 0,
+    creditAlertStartDate: '',
+    accountCreationDate: '',
   });
   const [adminPassword, setAdminPassword] = useState('');
   const [editAdminPassword, setEditAdminPassword] = useState('');
@@ -305,11 +333,49 @@ export default function Admin() {
       formData.append('email', form.email);
       formData.append('username', form.username);
       formData.append('password', form.password);
+      // Add account mode and balances
+      formData.append('accountMode', form.accountMode);
       formData.append('checkingBalance', form.checkingBalance.toString());
       formData.append('savingsBalance', form.savingsBalance.toString());
-      formData.append('creditLimit', form.creditLimit.toString());
+      
+      // Credit card handling
+      if (form.accountMode === 'custom') {
+        formData.append('enableCreditCard', form.enableCreditCard.toString());
+        if (form.enableCreditCard) {
+          formData.append('creditLimit', form.customCreditLimit.toString());
+        } else {
+          formData.append('creditLimit', '0');
+        }
+      } else {
+        formData.append('creditLimit', form.creditLimit.toString());
+      }
+      
       formData.append('includeTransactionHistory', form.includeTransactionHistory.toString());
       formData.append('isAdmin', form.isAdmin.toString());
+      
+      // Custom mode fields
+      if (form.accountMode === 'custom') {
+        // Account creation date
+        if (form.accountCreationDate) {
+          formData.append('accountCreationDate', form.accountCreationDate);
+        }
+        
+        // Debit alert config
+        formData.append('enableDebitAlerts', form.enableDebitAlerts.toString());
+        if (form.enableDebitAlerts) {
+          formData.append('debitAlertAmount', form.debitAlertAmount.toString());
+          formData.append('debitAlertStartDate', form.debitAlertStartDate);
+          formData.append('debitAlertMaxTransactions', form.debitAlertMaxTransactions.toString());
+        }
+        
+        // Credit alert config
+        formData.append('enableCreditAlerts', form.enableCreditAlerts.toString());
+        if (form.enableCreditAlerts) {
+          formData.append('creditAlertTotalAmount', form.creditAlertTotalAmount.toString());
+          formData.append('creditAlertTodayAmount', form.creditAlertTodayAmount.toString());
+          formData.append('creditAlertStartDate', form.creditAlertStartDate);
+        }
+      }
       
       // Add profile picture if selected
       if (form.profilePicture) {
@@ -350,6 +416,18 @@ export default function Admin() {
         creditLimit: 0,
         includeTransactionHistory: false,
         isAdmin: false,
+        accountMode: 'default',
+        enableCreditCard: true,
+        customCreditLimit: 0,
+        enableDebitAlerts: false,
+        debitAlertAmount: 0,
+        debitAlertStartDate: '',
+        debitAlertMaxTransactions: 1,
+        enableCreditAlerts: false,
+        creditAlertTotalAmount: 0,
+        creditAlertTodayAmount: 0,
+        creditAlertStartDate: '',
+        accountCreationDate: '',
       });
       setAdminPassword('');
       
@@ -1129,6 +1207,56 @@ export default function Admin() {
                 </div>
               </div>
 
+              {/* Account Mode Selector */}
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Account Creation Mode *
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="accountMode"
+                      value="default"
+                      checked={form.accountMode === 'default'}
+                      onChange={(e) => setForm(prev => ({ ...prev, accountMode: e.target.value as 'default' | 'custom' }))}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Default (Automatic)</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="accountMode"
+                      value="custom"
+                      checked={form.accountMode === 'custom'}
+                      onChange={(e) => setForm(prev => ({ ...prev, accountMode: e.target.value as 'default' | 'custom' }))}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Custom (Manual Control)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Custom Mode: Account Creation Date */}
+              {form.accountMode === 'custom' && (
+                <div className="border-t border-gray-200 pt-6">
+                  <label htmlFor="accountCreationDate" className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Creation Date (Dummy/Backdated) *
+                  </label>
+                  <input
+                    id="accountCreationDate"
+                    name="accountCreationDate"
+                    type="date"
+                    required={form.accountMode === 'custom'}
+                    value={form.accountCreationDate}
+                    onChange={handleInputChange}
+                    className="input"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Set a backdated creation date for the account</p>
+                </div>
+              )}
+
               {/* Account Balances */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
@@ -1165,24 +1293,201 @@ export default function Admin() {
                     placeholder="0.00"
                   />
                 </div>
-                <div>
-                  <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700 mb-2">
-                    Credit Limit *
-                  </label>
-                  <input
-                    id="creditLimit"
-                    name="creditLimit"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={form.creditLimit}
-                    onChange={handleInputChange}
-                    className="input"
-                    placeholder="0.00"
-                  />
-                </div>
+                {form.accountMode === 'default' ? (
+                  <div>
+                    <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700 mb-2">
+                      Credit Limit *
+                    </label>
+                    <input
+                      id="creditLimit"
+                      name="creditLimit"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={form.creditLimit}
+                      onChange={handleInputChange}
+                      className="input"
+                      placeholder="0.00"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center mb-2">
+                      <input
+                        id="enableCreditCard"
+                        name="enableCreditCard"
+                        type="checkbox"
+                        checked={form.enableCreditCard}
+                        onChange={(e) => setForm(prev => ({ ...prev, enableCreditCard: e.target.checked }))}
+                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="enableCreditCard" className="ml-2 block text-sm font-medium text-gray-700">
+                        Enable Credit Card
+                      </label>
+                    </div>
+                    {form.enableCreditCard && (
+                      <input
+                        id="customCreditLimit"
+                        name="customCreditLimit"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required={form.enableCreditCard}
+                        value={form.customCreditLimit}
+                        onChange={handleInputChange}
+                        className="input"
+                        placeholder="Credit Limit"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Custom Mode: Debit Alert Configuration */}
+              {form.accountMode === 'custom' && (
+                <div className="border-t border-gray-200 pt-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Debit Alert Configuration</h3>
+                  <div className="flex items-center">
+                    <input
+                      id="enableDebitAlerts"
+                      name="enableDebitAlerts"
+                      type="checkbox"
+                      checked={form.enableDebitAlerts}
+                      onChange={(e) => setForm(prev => ({ ...prev, enableDebitAlerts: e.target.checked }))}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="enableDebitAlerts" className="ml-2 block text-sm text-gray-700">
+                      Enable Debit Alerts
+                    </label>
+                  </div>
+                  {form.enableDebitAlerts && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pl-6 border-l-2 border-gray-200">
+                      <div>
+                        <label htmlFor="debitAlertAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                          Total Amount *
+                        </label>
+                        <input
+                          id="debitAlertAmount"
+                          name="debitAlertAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          required={form.enableDebitAlerts}
+                          value={form.debitAlertAmount}
+                          onChange={handleInputChange}
+                          className="input"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="debitAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
+                          Start Date *
+                        </label>
+                        <input
+                          id="debitAlertStartDate"
+                          name="debitAlertStartDate"
+                          type="date"
+                          required={form.enableDebitAlerts}
+                          value={form.debitAlertStartDate}
+                          onChange={handleInputChange}
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="debitAlertMaxTransactions" className="block text-sm font-medium text-gray-700 mb-2">
+                          Max Transactions *
+                        </label>
+                        <input
+                          id="debitAlertMaxTransactions"
+                          name="debitAlertMaxTransactions"
+                          type="number"
+                          min="1"
+                          required={form.enableDebitAlerts}
+                          value={form.debitAlertMaxTransactions}
+                          onChange={handleInputChange}
+                          className="input"
+                          placeholder="1"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Custom Mode: Credit Alert Configuration */}
+              {form.accountMode === 'custom' && (
+                <div className="border-t border-gray-200 pt-6 space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Credit Alert Configuration</h3>
+                  <div className="flex items-center">
+                    <input
+                      id="enableCreditAlerts"
+                      name="enableCreditAlerts"
+                      type="checkbox"
+                      checked={form.enableCreditAlerts}
+                      onChange={(e) => setForm(prev => ({ ...prev, enableCreditAlerts: e.target.checked }))}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="enableCreditAlerts" className="ml-2 block text-sm text-gray-700">
+                      Enable Credit Alerts
+                    </label>
+                  </div>
+                  {form.enableCreditAlerts && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pl-6 border-l-2 border-gray-200">
+                      <div>
+                        <label htmlFor="creditAlertTotalAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                          Total Amount to Split *
+                        </label>
+                        <input
+                          id="creditAlertTotalAmount"
+                          name="creditAlertTotalAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          required={form.enableCreditAlerts}
+                          value={form.creditAlertTotalAmount}
+                          onChange={handleInputChange}
+                          className="input"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="creditAlertTodayAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                          Today's Credit Amount *
+                        </label>
+                        <input
+                          id="creditAlertTodayAmount"
+                          name="creditAlertTodayAmount"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          required={form.enableCreditAlerts}
+                          value={form.creditAlertTodayAmount}
+                          onChange={handleInputChange}
+                          className="input"
+                          placeholder="0.00"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">This will be dated to today</p>
+                      </div>
+                      <div>
+                        <label htmlFor="creditAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
+                          Start Date for Remaining *
+                        </label>
+                        <input
+                          id="creditAlertStartDate"
+                          name="creditAlertStartDate"
+                          type="date"
+                          required={form.enableCreditAlerts}
+                          value={form.creditAlertStartDate}
+                          onChange={handleInputChange}
+                          className="input"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Remaining amount split from this date</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Transaction History Option */}
               <div className="flex items-center">
