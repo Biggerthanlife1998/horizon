@@ -6,8 +6,9 @@ import User from '../models/User';
 import Account from '../models/Account';
 import Transaction from '../models/Transaction';
 import Card from '../models/Card';
+import mongoose from 'mongoose';
 import { generateTransactionRules, calculateAccountDistribution } from '../utils/transactionRules';
-import { generateTransactionHistory } from '../utils/transactionGenerator';
+import { generateTransactionHistory, generateCustomAlertsOnly } from '../utils/transactionGenerator';
 import { generateUserCards } from '../utils/cardGenerator';
 
 const router = Router();
@@ -70,16 +71,41 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
       savingsBalance,
       creditLimit,
       includeTransactionHistory,
-      isAdmin
+      isAdmin,
+      // Custom mode fields
+      accountMode,
+      enableCreditCard,
+      customCreditLimit,
+      enableDebitAlerts,
+      debitAlertAmount,
+      debitAlertStartDate,
+      debitAlertMaxTransactions,
+      enableCreditAlerts,
+      creditAlertTotalAmount,
+      creditAlertTodayAmount,
+      creditAlertStartDate,
+      accountCreationDate
     } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !preferredDisplayName || !address || !phoneNumber || 
-        !email || !username || !password || !checkingBalance || !savingsBalance || !creditLimit) {
+        !email || !username || !password || !checkingBalance || !savingsBalance) {
       return res.status(400).json({
         error: 'Missing required fields',
         message: 'All required fields must be provided'
       });
+    }
+
+    // Handle credit limit based on mode
+    let finalCreditLimit = 0;
+    if (accountMode === 'custom') {
+      if (enableCreditCard === 'true') {
+        finalCreditLimit = parseFloat(customCreditLimit) || 0;
+      } else {
+        finalCreditLimit = 0;
+      }
+    } else {
+      finalCreditLimit = parseFloat(creditLimit) || 0;
     }
 
     // Check if user already exists
@@ -114,7 +140,7 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     await user.save();
 
     // Calculate total balance for transaction rules (including credit limit)
-    const totalBalance = parseFloat(checkingBalance) + parseFloat(savingsBalance) + parseFloat(creditLimit);
+    const totalBalance = parseFloat(checkingBalance) + parseFloat(savingsBalance) + finalCreditLimit;
     
     // Generate transaction rules based on total balance
     const transactionRules = generateTransactionRules(totalBalance);
@@ -123,15 +149,23 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     const accountDistribution = {
       checking: parseFloat(checkingBalance),
       savings: parseFloat(savingsBalance),
-      credit: parseFloat(creditLimit)
+      credit: finalCreditLimit
     };
+
+    // Determine account creation date (use custom date if provided, otherwise use current date)
+    let accountCreationDateValue: Date;
+    if (accountMode === 'custom' && accountCreationDate) {
+      accountCreationDateValue = new Date(accountCreationDate);
+    } else {
+      accountCreationDateValue = new Date();
+    }
 
     // Create account
     const account = new Account({
       userId: user._id,
       totalBalance: totalBalance,
       accountDistribution,
-      creationDate: new Date(),
+      creationDate: accountCreationDateValue,
       includeTransactionHistory: includeTransactionHistory === 'true',
       transactionRules
     });
@@ -160,44 +194,89 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
       // Don't fail the user creation if card generation fails
     }
 
-    // Generate transaction history if requested
+    // Prepare custom alert configuration if in custom mode
+    const customConfig = accountMode === 'custom' ? {
+      enableDebitAlerts: enableDebitAlerts === 'true',
+      debitAlertAmount: enableDebitAlerts === 'true' ? parseFloat(debitAlertAmount || '0') : 0,
+      debitAlertStartDate: enableDebitAlerts === 'true' && debitAlertStartDate ? new Date(debitAlertStartDate) : undefined,
+      debitAlertMaxTransactions: enableDebitAlerts === 'true' ? parseInt(debitAlertMaxTransactions || '1') : 0,
+      enableCreditAlerts: enableCreditAlerts === 'true',
+      creditAlertTotalAmount: enableCreditAlerts === 'true' ? parseFloat(creditAlertTotalAmount || '0') : 0,
+      creditAlertTodayAmount: enableCreditAlerts === 'true' ? parseFloat(creditAlertTodayAmount || '0') : 0,
+      creditAlertStartDate: enableCreditAlerts === 'true' && creditAlertStartDate ? new Date(creditAlertStartDate) : undefined
+    } : undefined;
+
+    // Generate transactions
     let transactionCount = 0;
-    if (includeTransactionHistory === 'true') {
-      try {
+    const allTransactions: any[] = [];
+
+    try {
+      // Generate custom alerts if in custom mode (regardless of includeTransactionHistory)
+      if (customConfig && (customConfig.enableDebitAlerts || customConfig.enableCreditAlerts)) {
+        console.log('Generating custom alerts for user:', user.username);
+        console.log('Custom config:', customConfig);
+        const customAlerts = generateCustomAlertsOnly((user._id as any).toString(), customConfig);
+        console.log('Generated custom alerts count:', customAlerts.length);
+        if (customAlerts.length > 0) {
+          console.log('Sample custom alert:', customAlerts[0]);
+        }
+        allTransactions.push(...customAlerts);
+      }
+
+      // Generate regular transaction history if requested
+      if (includeTransactionHistory === 'true') {
         console.log('Starting transaction generation for user:', user.username);
         console.log('User ID:', (user._id as any).toString());
         console.log('Total Balance:', account.totalBalance);
-        console.log('Credit Limit:', creditLimit);
+        console.log('Credit Limit:', finalCreditLimit);
+        console.log('Account Mode:', accountMode);
         console.log('Transaction Rules:', transactionRules);
         
-        const generatedTransactions = generateTransactionHistory(
+        // Use custom account creation date if provided, otherwise use user creation date
+        const transactionHistoryDate = accountMode === 'custom' && accountCreationDate 
+          ? new Date(accountCreationDate) 
+          : accountCreationDateValue;
+        
+        // Generate regular history (don't pass customConfig to avoid duplicating custom alerts)
+        const regularHistory = generateTransactionHistory(
           (user._id as any).toString(),
           account.totalBalance,
           transactionRules,
           6, // Generate 6 months of history
-          parseFloat(creditLimit),
-          user.createdAt // Pass user creation date for dynamic history
+          finalCreditLimit,
+          transactionHistoryDate,
+          undefined // Don't pass customConfig - custom alerts are handled separately
         );
 
-        console.log('Generated transactions count:', generatedTransactions.length);
-        console.log('First few transactions:', generatedTransactions.slice(0, 3));
+        console.log('Generated regular history count:', regularHistory.length);
+        allTransactions.push(...regularHistory);
+      }
 
-        // Save all transactions to database
-        console.log('Creating transaction documents...');
-        const transactionDocs = generatedTransactions.map(tx => new Transaction(tx));
-        console.log('Sample transaction doc:', transactionDocs[0]);
+      // Save all transactions to database
+      if (allTransactions.length > 0) {
+        console.log('Total transactions to save:', allTransactions.length);
+        console.log('Sample transaction:', allTransactions[0]);
+        
+        // Convert userId to ObjectId for database
+        const transactionDocs = allTransactions.map(tx => {
+          const txDoc = {
+            ...tx,
+            userId: typeof tx.userId === 'string' ? new mongoose.Types.ObjectId(tx.userId) : tx.userId
+          };
+          return new Transaction(txDoc);
+        });
         
         console.log('Attempting to insert transactions...');
         const savedTransactions = await Transaction.insertMany(transactionDocs);
         
         transactionCount = savedTransactions.length;
         console.log(`Successfully saved ${transactionCount} transactions for user ${user.username}`);
-      } catch (error) {
-        console.error('Failed to generate transaction history:', error);
-        console.error('Error details:', (error as any).message);
-        console.error('Stack trace:', (error as any).stack);
-        // Don't fail the user creation if transaction generation fails
       }
+    } catch (error) {
+      console.error('Failed to generate transactions:', error);
+      console.error('Error details:', (error as any).message);
+      console.error('Stack trace:', (error as any).stack);
+      // Don't fail the user creation if transaction generation fails
     }
 
     // Return user summary (without sensitive data)

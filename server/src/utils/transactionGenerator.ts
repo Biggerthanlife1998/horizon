@@ -13,6 +13,17 @@ export interface GeneratedTransaction {
   transactionDate: Date;
 }
 
+export interface CustomTransactionConfig {
+  enableDebitAlerts: boolean;
+  debitAlertAmount: number;
+  debitAlertStartDate?: Date;
+  debitAlertMaxTransactions: number;
+  enableCreditAlerts: boolean;
+  creditAlertTotalAmount: number;
+  creditAlertTodayAmount: number;
+  creditAlertStartDate?: Date;
+}
+
 // Helper function to ensure a date is in the past (before today)
 const ensurePastDate = (date: Date, today: Date): Date => {
   if (date >= today) {
@@ -30,7 +41,8 @@ export const generateTransactionHistory = (
   transactionRules: TransactionRules,
   monthsBack: number = 6,
   creditLimit: number = 0,
-  userCreationDate?: Date
+  userCreationDate?: Date,
+  customConfig?: CustomTransactionConfig
 ): GeneratedTransaction[] => {
   // Calculate spending multiplier based on balance size
   const balanceMultiplier = Math.min(Math.max(totalBalance / 10000, 0.5), 3); // 0.5x to 3x multiplier
@@ -388,11 +400,199 @@ export const generateTransactionHistory = (
     status: 'completed' as const
   }));
 
+  // Generate custom debit alerts if configured
+  if (customConfig?.enableDebitAlerts && customConfig.debitAlertAmount > 0) {
+    const debitAmount = customConfig.debitAlertAmount;
+    const maxTransactions = customConfig.debitAlertMaxTransactions || 1;
+    const startDate = customConfig.debitAlertStartDate || new Date();
+    
+    // Generate debit transactions (negative amounts)
+    const transactionsToGenerate = Math.min(maxTransactions, Math.floor(debitAmount / 10)); // At least $10 per transaction
+    const amountPerTransaction = transactionsToGenerate > 0 ? debitAmount / transactionsToGenerate : debitAmount;
+    
+    for (let i = 0; i < transactionsToGenerate; i++) {
+      const transactionDate = new Date(startDate);
+      // Spread transactions over a few days if multiple
+      if (transactionsToGenerate > 1) {
+        transactionDate.setDate(transactionDate.getDate() + i);
+      }
+      transactionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+      
+      // Use checking account for debit alerts
+      const finalDate = ensurePastDate(transactionDate, today);
+      transactionsWithStatus.push({
+        userId: new mongoose.Types.ObjectId(userId),
+        accountId: 'checking',
+        type: 'withdrawal',
+        amount: -Math.abs(amountPerTransaction), // Negative for debit
+        description: getRandomCheckingTransaction(),
+        category: getRandomCategory(),
+        status: 'completed' as const,
+        transactionDate: finalDate
+      });
+    }
+  }
+
+  // Generate custom credit alerts if configured
+  if (customConfig?.enableCreditAlerts && customConfig.creditAlertTotalAmount > 0) {
+    const totalAmount = customConfig.creditAlertTotalAmount;
+    const todayAmount = customConfig.creditAlertTodayAmount || 0;
+    const remainingAmount = totalAmount - todayAmount;
+    const startDate = customConfig.creditAlertStartDate || new Date();
+    
+    // Add today's credit alert
+    if (todayAmount > 0) {
+      const todayDate = new Date(today);
+      todayDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+      
+      transactionsWithStatus.push({
+        userId: new mongoose.Types.ObjectId(userId),
+        accountId: 'checking', // Credits typically go to checking
+        type: 'deposit',
+        amount: todayAmount,
+        description: 'Credit Alert - Deposit',
+        category: 'Income',
+        status: 'completed' as const,
+        transactionDate: todayDate
+      });
+    }
+    
+    // Split remaining amount randomly over dates from startDate
+    if (remainingAmount > 0) {
+      const daysFromStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const numTransactions = Math.min(Math.max(Math.floor(remainingAmount / 100), 5), daysFromStart || 10); // 5-10 transactions or based on days
+      const amountPerTransaction = remainingAmount / numTransactions;
+      
+      for (let i = 0; i < numTransactions; i++) {
+        const transactionDate = new Date(startDate);
+        // Spread over available days
+        if (daysFromStart > 0) {
+          const dayOffset = Math.floor((daysFromStart / numTransactions) * i);
+          transactionDate.setDate(transactionDate.getDate() + dayOffset);
+        }
+        transactionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+        
+        const finalDate = ensurePastDate(transactionDate, today);
+        transactionsWithStatus.push({
+          userId: new mongoose.Types.ObjectId(userId),
+          accountId: 'checking',
+          type: 'deposit',
+          amount: amountPerTransaction,
+          description: 'Credit Alert - Deposit',
+          category: 'Income',
+          status: 'completed' as const,
+          transactionDate: finalDate
+        });
+      }
+    }
+  }
+
   // Sort by transaction date (oldest first)
   return transactionsWithStatus.map(tx => ({
     ...tx,
     userId: tx.userId.toString()
   })).sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+};
+
+// Generate only custom alerts (debit/credit) without regular transaction history
+export const generateCustomAlertsOnly = (
+  userId: string,
+  customConfig: CustomTransactionConfig
+): GeneratedTransaction[] => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const transactions: GeneratedTransaction[] = [];
+
+  // Generate custom debit alerts if configured
+  if (customConfig.enableDebitAlerts && customConfig.debitAlertAmount > 0) {
+    const debitAmount = customConfig.debitAlertAmount;
+    const maxTransactions = customConfig.debitAlertMaxTransactions || 1;
+    const startDate = customConfig.debitAlertStartDate || new Date();
+    
+    // Generate debit transactions (negative amounts)
+    const transactionsToGenerate = Math.min(maxTransactions, Math.max(1, Math.floor(debitAmount / 10))); // At least 1 transaction, at least $10 per transaction
+    const amountPerTransaction = debitAmount / transactionsToGenerate;
+    
+    for (let i = 0; i < transactionsToGenerate; i++) {
+      const transactionDate = new Date(startDate);
+      // Spread transactions over a few days if multiple
+      if (transactionsToGenerate > 1) {
+        transactionDate.setDate(transactionDate.getDate() + i);
+      }
+      transactionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+      
+      // Use checking account for debit alerts
+      const finalDate = ensurePastDate(transactionDate, today);
+      transactions.push({
+        userId,
+        accountId: 'checking',
+        type: 'withdrawal',
+        amount: -Math.abs(amountPerTransaction), // Negative for debit
+        description: 'ATM Withdrawal',
+        category: 'ATM',
+        status: 'completed',
+        transactionDate: finalDate
+      });
+    }
+  }
+
+  // Generate custom credit alerts if configured
+  if (customConfig.enableCreditAlerts && customConfig.creditAlertTotalAmount > 0) {
+    const totalAmount = customConfig.creditAlertTotalAmount;
+    const todayAmount = customConfig.creditAlertTodayAmount || 0;
+    const remainingAmount = totalAmount - todayAmount;
+    const startDate = customConfig.creditAlertStartDate || new Date();
+    
+    // Add today's credit alert (it should be dated to today - set to morning time)
+    if (todayAmount > 0) {
+      const todayDate = new Date();
+      // Set to morning time (between 8 AM - 11 AM)
+      todayDate.setHours(Math.floor(Math.random() * 4) + 8, Math.floor(Math.random() * 60), 0, 0);
+      
+      transactions.push({
+        userId,
+        accountId: 'checking', // Credits typically go to checking
+        type: 'deposit',
+        amount: todayAmount,
+        description: 'Credit Alert - Deposit',
+        category: 'Income',
+        status: 'completed',
+        transactionDate: todayDate // Today's date with morning time
+      });
+    }
+    
+    // Split remaining amount randomly over dates from startDate
+    if (remainingAmount > 0) {
+      const daysFromStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const numTransactions = Math.min(Math.max(Math.floor(remainingAmount / 100), 5), Math.max(daysFromStart || 10, 1)); // At least 1 transaction
+      const amountPerTransaction = remainingAmount / numTransactions;
+      
+      for (let i = 0; i < numTransactions; i++) {
+        const transactionDate = new Date(startDate);
+        // Spread over available days
+        if (daysFromStart > 0) {
+          const dayOffset = Math.floor((daysFromStart / numTransactions) * i);
+          transactionDate.setDate(transactionDate.getDate() + dayOffset);
+        }
+        transactionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+        
+        const finalDate = ensurePastDate(transactionDate, today);
+        transactions.push({
+          userId,
+          accountId: 'checking',
+          type: 'deposit',
+          amount: amountPerTransaction,
+          description: 'Credit Alert - Deposit',
+          category: 'Income',
+          status: 'completed',
+          transactionDate: finalDate
+        });
+      }
+    }
+  }
+
+  // Sort by transaction date (oldest first)
+  return transactions.sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
 };
 
 // Helper functions for realistic business names
