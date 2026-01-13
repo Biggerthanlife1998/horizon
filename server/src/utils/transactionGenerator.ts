@@ -495,6 +495,113 @@ export const generateTransactionHistory = (
 };
 
 // Generate only custom alerts (debit/credit) without regular transaction history
+/**
+ * Generate savings account transactions using hybrid approach (Option 3)
+ * - Calculates account age from creation date
+ * - Estimates monthly contributions needed to reach current balance
+ * - Generates interest based on gradually increasing balance
+ * - Generates transfers from checking account
+ */
+export const generateSavingsTransactions = (
+  userId: string,
+  savingsBalance: number,
+  checkingBalance: number,
+  accountCreationDate: Date
+): GeneratedTransaction[] => {
+  const transactions: GeneratedTransaction[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Calculate account age in months
+  const accountAgeMs = today.getTime() - accountCreationDate.getTime();
+  const accountAgeMonths = Math.max(1, Math.floor(accountAgeMs / (1000 * 60 * 60 * 24 * 30)));
+  
+  // If savings balance is 0 or very small, don't generate transactions
+  if (savingsBalance < 10) {
+    return transactions;
+  }
+  
+  // Estimate initial savings balance (10-20% of current balance)
+  const initialSavingsBalance = savingsBalance * (0.1 + Math.random() * 0.1);
+  
+  // Calculate total amount that needs to be added via transfers
+  // Account for interest that will be earned
+  const estimatedInterestRate = 0.004; // 0.4% monthly (roughly 4.8% APY)
+  let estimatedTotalInterest = 0;
+  let runningBalance = initialSavingsBalance;
+  
+  // Estimate interest over account lifetime
+  for (let month = 0; month < accountAgeMonths; month++) {
+    const monthlyInterest = runningBalance * estimatedInterestRate;
+    estimatedTotalInterest += monthlyInterest;
+    runningBalance += monthlyInterest;
+  }
+  
+  // Calculate how much needs to come from transfers
+  const totalNeededFromTransfers = savingsBalance - initialSavingsBalance - estimatedTotalInterest;
+  const averageMonthlyTransfer = totalNeededFromTransfers / accountAgeMonths;
+  
+  // Generate transactions month by month
+  let currentSavingsBalance = initialSavingsBalance;
+  
+  for (let month = 0; month < accountAgeMonths; month++) {
+    const monthDate = new Date(accountCreationDate);
+    monthDate.setMonth(monthDate.getMonth() + month);
+    
+    // Monthly interest payment (1st-5th of month)
+    const interestDay = Math.floor(Math.random() * 5) + 1;
+    const interestDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), interestDay);
+    interestDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0);
+    const finalInterestDate = ensurePastDate(interestDate, today);
+    
+    // Calculate interest based on current balance (0.3-0.5% monthly)
+    const interestRate = 0.003 + Math.random() * 0.002; // 0.3-0.5%
+    const interestAmount = currentSavingsBalance * interestRate;
+    currentSavingsBalance += interestAmount;
+    
+    transactions.push({
+      userId,
+      accountId: 'savings',
+      type: 'deposit' as const,
+      amount: Math.round(interestAmount * 100) / 100,
+      description: 'Interest Payment',
+      category: 'Interest',
+      status: 'completed' as const,
+      transactionDate: finalInterestDate
+    });
+    
+    // Monthly transfer from checking (20th-28th of month)
+    // Only generate if checking balance is sufficient
+    if (checkingBalance > 0 && averageMonthlyTransfer > 0) {
+      const transferDay = Math.floor(Math.random() * 9) + 20;
+      const transferDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), transferDay);
+      transferDate.setHours(Math.floor(Math.random() * 8) + 9, Math.floor(Math.random() * 60), 0, 0);
+      const finalTransferDate = ensurePastDate(transferDate, today);
+      
+      // Vary transfer amount slightly (±20%)
+      const transferVariation = 0.8 + Math.random() * 0.4;
+      const transferAmount = Math.max(10, Math.round((averageMonthlyTransfer * transferVariation) * 100) / 100);
+      currentSavingsBalance += transferAmount;
+      
+      transactions.push({
+        userId,
+        accountId: 'savings',
+        type: 'deposit' as const,
+        amount: transferAmount,
+        description: 'Transfer from Checking',
+        category: 'Transfer',
+        status: 'completed' as const,
+        transactionDate: finalTransferDate
+      });
+    }
+  }
+  
+  // Sort transactions by date
+  transactions.sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+  
+  return transactions;
+};
+
 export const generateCustomAlertsOnly = (
   userId: string,
   customConfig: CustomTransactionConfig

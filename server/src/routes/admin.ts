@@ -8,7 +8,7 @@ import Transaction from '../models/Transaction';
 import Card from '../models/Card';
 import mongoose from 'mongoose';
 import { generateTransactionRules, calculateAccountDistribution } from '../utils/transactionRules';
-import { generateTransactionHistory, generateCustomAlertsOnly } from '../utils/transactionGenerator';
+import { generateTransactionHistory, generateCustomAlertsOnly, generateSavingsTransactions } from '../utils/transactionGenerator';
 import { generateUserCards } from '../utils/cardGenerator';
 
 const router = Router();
@@ -215,6 +215,17 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
       if (customConfig && (customConfig.enableDebitAlerts || customConfig.enableCreditAlerts)) {
         const customAlerts = generateCustomAlertsOnly((user._id as any).toString(), customConfig);
         allTransactions.push(...customAlerts);
+      }
+
+      // Always generate savings transactions in custom mode (even if includeTransactionHistory is false)
+      if (accountMode === 'custom' && account.accountDistribution.savings > 0) {
+        const savingsTransactions = generateSavingsTransactions(
+          (user._id as any).toString(),
+          account.accountDistribution.savings,
+          account.accountDistribution.checking,
+          accountCreationDateValue
+        );
+        allTransactions.push(...savingsTransactions);
       }
 
       // Generate regular transaction history if requested
@@ -1333,6 +1344,101 @@ router.put('/toggle-account-status/:userId', async (req: Request, res: Response)
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to update account status'
+    });
+  }
+});
+
+// POST /api/admin/backfill-savings-transactions/:userId
+router.post('/backfill-savings-transactions/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User with the specified ID does not exist'
+      });
+    }
+
+    // Find account
+    const account = await Account.findOne({ userId: user._id });
+    if (!account) {
+      return res.status(404).json({
+        error: 'Account not found',
+        message: 'Account for this user does not exist'
+      });
+    }
+
+    // Check if savings balance exists
+    if (!account.accountDistribution.savings || account.accountDistribution.savings <= 0) {
+      return res.status(400).json({
+        error: 'No savings balance',
+        message: 'User has no savings balance to generate transactions for'
+      });
+    }
+
+    // Check if savings transactions already exist
+    const existingSavingsTransactions = await Transaction.countDocuments({
+      userId: user._id,
+      accountId: 'savings'
+    });
+
+    if (existingSavingsTransactions > 0) {
+      return res.status(400).json({
+        error: 'Transactions already exist',
+        message: `User already has ${existingSavingsTransactions} savings transactions. Delete existing transactions first if you want to regenerate.`
+      });
+    }
+
+    // Generate savings transactions
+    const savingsTransactions = generateSavingsTransactions(
+      (user._id as any).toString(),
+      account.accountDistribution.savings,
+      account.accountDistribution.checking,
+      account.creationDate
+    );
+
+    if (savingsTransactions.length === 0) {
+      return res.status(400).json({
+        error: 'No transactions generated',
+        message: 'Could not generate savings transactions. Account may be too new or balance too small.'
+      });
+    }
+
+    // Convert userId to ObjectId and save transactions
+    const transactionDocs = savingsTransactions.map(tx => {
+      const txDoc = {
+        ...tx,
+        userId: typeof tx.userId === 'string' ? new mongoose.Types.ObjectId(tx.userId) : tx.userId
+      };
+      return new Transaction(txDoc);
+    });
+
+    const savedTransactions = await Transaction.insertMany(transactionDocs);
+
+    res.json({
+      message: 'Savings transactions generated successfully',
+      transactionsGenerated: savedTransactions.length,
+      user: {
+        id: user._id,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName
+      },
+      account: {
+        savingsBalance: account.accountDistribution.savings,
+        checkingBalance: account.accountDistribution.checking,
+        accountCreationDate: account.creationDate
+      }
+    });
+
+  } catch (error) {
+    console.error('Backfill savings transactions error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to generate savings transactions'
     });
   }
 });
