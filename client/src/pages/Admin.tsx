@@ -192,6 +192,7 @@ export default function Admin() {
   const [loadingPendingTransactions, setLoadingPendingTransactions] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [updatingAccountStatus, setUpdatingAccountStatus] = useState<string | null>(null);
+  const [backfillingSavings, setBackfillingSavings] = useState<string | null>(null);
 
   // Edit User State
   const [editUserSearch, setEditUserSearch] = useState('');
@@ -498,6 +499,47 @@ export default function Admin() {
       setPendingTransactions([]);
     } finally {
       setLoadingPendingTransactions(false);
+    }
+  };
+
+  const handleBackfillSavingsTransactions = async (userId: string) => {
+    if (!adminPassword) return;
+
+    setBackfillingSavings(userId);
+    try {
+      const response = await fetch(`${getApiUrl()}/admin/backfill-savings-transactions/${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setToast({
+          type: 'success',
+          message: `Successfully generated ${data.transactionsGenerated} savings transactions`
+        });
+        // Refresh pending transactions to show any new ones
+        if (selectedUser && selectedUser._id === userId) {
+          fetchPendingTransactions(userId);
+        }
+      } else {
+        const errorData = await response.json();
+        setToast({
+          type: 'error',
+          message: errorData.message || 'Failed to generate savings transactions'
+        });
+      }
+    } catch (error) {
+      console.error('Failed to backfill savings transactions:', error);
+      setToast({
+        type: 'error',
+        message: 'Failed to generate savings transactions'
+      });
+    } finally {
+      setBackfillingSavings(null);
     }
   };
 
@@ -1993,18 +2035,39 @@ export default function Admin() {
                       <Clock className="w-5 h-5 text-yellow-600 mr-2" />
                       <h3 className="text-lg font-semibold text-gray-900">Pending Transactions</h3>
                     </div>
-                    <button
-                      onClick={() => selectedUser && fetchPendingTransactions(selectedUser._id)}
-                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center"
-                      disabled={loadingPendingTransactions}
-                    >
-                      {loadingPendingTransactions ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                      ) : (
-                        <History className="w-4 h-4 mr-1" />
+                    <div className="flex items-center space-x-2">
+                      {selectedUser.account?.accountDistribution?.savings > 0 && (
+                        <button
+                          onClick={() => handleBackfillSavingsTransactions(selectedUser._id)}
+                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center px-3 py-1.5 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                          disabled={backfillingSavings === selectedUser._id}
+                        >
+                          {backfillingSavings === selectedUser._id ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <DollarSign className="w-4 h-4 mr-1" />
+                              Backfill Savings
+                            </>
+                          )}
+                        </button>
                       )}
-                      Refresh
-                    </button>
+                      <button
+                        onClick={() => selectedUser && fetchPendingTransactions(selectedUser._id)}
+                        className="text-sm text-primary-600 hover:text-primary-700 flex items-center"
+                        disabled={loadingPendingTransactions}
+                      >
+                        {loadingPendingTransactions ? (
+                          <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                        ) : (
+                          <History className="w-4 h-4 mr-1" />
+                        )}
+                        Refresh
+                      </button>
+                    </div>
                   </div>
 
                   {loadingPendingTransactions ? (
