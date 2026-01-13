@@ -213,13 +213,7 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     try {
       // Generate custom alerts if in custom mode (regardless of includeTransactionHistory)
       if (customConfig && (customConfig.enableDebitAlerts || customConfig.enableCreditAlerts)) {
-        console.log('Generating custom alerts for user:', user.username);
-        console.log('Custom config:', customConfig);
         const customAlerts = generateCustomAlertsOnly((user._id as any).toString(), customConfig);
-        console.log('Generated custom alerts count:', customAlerts.length);
-        if (customAlerts.length > 0) {
-          console.log('Sample custom alert:', customAlerts[0]);
-        }
         allTransactions.push(...customAlerts);
       }
 
