@@ -129,6 +129,8 @@ export default function Transfer() {
   const [previewData, setPreviewData] = useState<any>(null);
   const [amlCode, setAmlCode] = useState('');
   const [amlCodeError, setAmlCodeError] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
   
   
   // Scheduled transfer confirmation state
@@ -622,27 +624,21 @@ export default function Transfer() {
     setShowPreview(true);
   };
 
-  // Handle Submit in preview - show error
+  // Handle Submit in preview - show processing then error
   const handlePreviewSubmit = () => {
     setShowPreview(false);
-    setShowError(true);
-  };
-
-
-
-
-  const handleDownloadReceipt = async () => {
-    if (!receiptData) return;
+    setProcessing(true);
     
-    try {
-      // This is a placeholder for PDF generation
-      // You'll need to install and implement jsPDF or html2pdf
-      console.log('Downloading receipt:', receiptData);
-      alert('PDF receipt download would be implemented here with jsPDF or html2pdf');
-    } catch (error) {
-      console.error('Failed to download receipt:', error);
-    }
+    // Show processing for 10 seconds, then show error
+    setTimeout(() => {
+      setProcessing(false);
+      setShowError(true);
+    }, 10000); // 10 seconds
   };
+
+
+
+
 
   const getAccountIcon = (accountType: string) => {
     switch (accountType) {
@@ -686,7 +682,8 @@ export default function Transfer() {
             <ArrowRight className="w-4 h-4 inline mr-2" />
             Send Money
           </button>
-          <button
+          {/* Scheduled Transfers tab commented out */}
+          {/* <button
             onClick={() => setActiveTab('scheduled')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'scheduled'
@@ -696,8 +693,9 @@ export default function Transfer() {
           >
             <Clock className="w-4 h-4 inline mr-2" />
             Scheduled Transfers
-          </button>
-          <button
+          </button> */}
+          {/* Transfer History tab commented out */}
+          {/* <button
             onClick={() => setActiveTab('history')}
             className={`py-2 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'history'
@@ -707,7 +705,7 @@ export default function Transfer() {
           >
             <History className="w-4 h-4 inline mr-2" />
             Transfer History
-          </button>
+          </button> */}
           {/* Analytics tab commented out for now */}
           {/* <button
             onClick={() => setActiveTab('analytics')}
@@ -820,19 +818,29 @@ export default function Transfer() {
           />
 
           {/* Send Button */}
-          <LoadingButton
+          <button
             type="submit"
-            loading={loading}
-            className="w-full"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-2"
           >
-            {loading ? 'Processing...' : 'Send'}
-          </LoadingButton>
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <ArrowRight className="w-5 h-5" />
+                <span>Send</span>
+              </>
+            )}
+          </button>
         </form>
       </div>
       )}
 
-      {/* Scheduled Transfers Section */}
-      {activeTab === 'scheduled' && (
+      {/* Scheduled Transfers Section - Commented out */}
+      {false && activeTab === 'scheduled' && (
         <div className="space-y-6">
           {/* Create Scheduled Transfer Form */}
           <div className="card max-w-2xl">
@@ -1149,8 +1157,8 @@ export default function Transfer() {
         </div>
       )}
 
-      {/* Transfer History Section */}
-      {activeTab === 'history' && (
+      {/* Transfer History Section - Commented out */}
+      {false && (
       <div className="card">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
@@ -1784,6 +1792,38 @@ export default function Transfer() {
         )}
       </Modal>
 
+      {/* Processing Modal */}
+      <Modal
+        isOpen={processing}
+        onClose={() => {}} // Prevent closing during processing
+        title=""
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary-100 mb-6">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent"></div>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Processing Your Transfer
+            </h3>
+            <p className="text-sm text-gray-600">
+              Please wait while we process your transaction...
+            </p>
+          </div>
+
+          {/* Progress indicator */}
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="bg-primary-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-xs text-gray-500">
+              This may take a few moments
+            </p>
+          </div>
+        </div>
+      </Modal>
+
       {/* AML Code Requirement Modal */}
       <Modal
         isOpen={showError}
@@ -1862,20 +1902,9 @@ export default function Transfer() {
                   return;
                 }
                 
-                // For now, just close the modal (no actual validation)
+                // Show verification modal
                 setShowError(false);
-                setAmlCode('');
-                setAmlCodeError('');
-                // Reset form after closing
-                setForm({
-                  fromAccount: '',
-                  bankName: '',
-                  accountNumber: '',
-                  routingNumber: '',
-                  accountHolderName: '',
-                  amount: '',
-                  description: ''
-                });
+                setShowVerification(true);
               }}
               className="btn-primary w-full"
             >
@@ -1900,6 +1929,71 @@ export default function Transfer() {
               className="btn-secondary w-full mt-3"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Verification Modal */}
+      <Modal
+        isOpen={showVerification}
+        onClose={() => {
+          setShowVerification(false);
+          setAmlCode('');
+          setAmlCodeError('');
+          // Reset form after closing
+          setForm({
+            fromAccount: '',
+            bankName: '',
+            accountNumber: '',
+            routingNumber: '',
+            accountHolderName: '',
+            amount: '',
+            description: ''
+          });
+        }}
+        title=""
+      >
+        <div className="space-y-6">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+              <Shield className="w-8 h-8 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Transaction Verification
+            </h3>
+            <p className="text-sm text-gray-700 leading-relaxed">
+              This transaction is being verified. We will get back to you.
+            </p>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-xs text-blue-800 leading-relaxed text-center">
+              Your transaction has been submitted and is currently under review. You will receive a notification once the verification process is complete.
+            </p>
+          </div>
+
+          {/* Action Button */}
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setShowVerification(false);
+                setAmlCode('');
+                setAmlCodeError('');
+                // Reset form after closing
+                setForm({
+                  fromAccount: '',
+                  bankName: '',
+                  accountNumber: '',
+                  routingNumber: '',
+                  accountHolderName: '',
+                  amount: '',
+                  description: ''
+                });
+              }}
+              className="btn-primary w-full"
+            >
+              Close
             </button>
           </div>
         </div>
