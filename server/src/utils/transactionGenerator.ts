@@ -565,27 +565,89 @@ export const generateCustomAlertsOnly = (
     if (remainingAmount > 0) {
       const daysFromStart = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
       const numTransactions = Math.min(Math.max(Math.floor(remainingAmount / 100), 5), Math.max(daysFromStart || 10, 1)); // At least 1 transaction
-      const amountPerTransaction = remainingAmount / numTransactions;
+      
+      // Generate random amounts that sum to remainingAmount
+      const randomAmounts: number[] = [];
+      let totalRandom = 0;
+      
+      // Generate random weights for each transaction
+      for (let i = 0; i < numTransactions; i++) {
+        const randomWeight = Math.random() * 0.8 + 0.2; // Between 0.2 and 1.0 to add variation
+        randomAmounts.push(randomWeight);
+        totalRandom += randomWeight;
+      }
+      
+      // Normalize to sum to remainingAmount
+      const normalizedAmounts = randomAmounts.map(weight => (weight / totalRandom) * remainingAmount);
+      
+      // Generate dates with realistic gaps spread across the date range
+      const transactionDates: Date[] = [];
+      const usedDayOffsets = new Set<number>();
+      
+      // Calculate how many days we can spread across
+      const availableDays = Math.max(1, daysFromStart);
       
       for (let i = 0; i < numTransactions; i++) {
-        const transactionDate = new Date(startDate);
-        // Spread over available days
-        if (daysFromStart > 0) {
-          const dayOffset = Math.floor((daysFromStart / numTransactions) * i);
-          transactionDate.setDate(transactionDate.getDate() + dayOffset);
-        }
-        transactionDate.setHours(Math.floor(Math.random() * 12) + 8, Math.floor(Math.random() * 60), 0, 0);
+        let dayOffset: number;
+        let attempts = 0;
         
-        const finalDate = ensurePastDate(transactionDate, today);
+        // Generate a day offset that's spread across the range with gaps
+        do {
+          if (availableDays > numTransactions) {
+            // If we have more days than transactions, spread them out with gaps
+            // Each transaction gets roughly (availableDays / numTransactions) days apart
+            const baseSpacing = Math.floor(availableDays / numTransactions);
+            const randomVariation = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1 day variation
+            dayOffset = Math.min(Math.max(0, (i * baseSpacing) + randomVariation), availableDays - 1);
+          } else {
+            // If we have fewer days than transactions, distribute randomly
+            dayOffset = Math.floor(Math.random() * availableDays);
+          }
+          attempts++;
+        } while (usedDayOffsets.has(dayOffset) && attempts < 20);
+        
+        // If we still have a duplicate, find the next available day
+        if (usedDayOffsets.has(dayOffset)) {
+          for (let j = 0; j < availableDays; j++) {
+            if (!usedDayOffsets.has(j)) {
+              dayOffset = j;
+              break;
+            }
+          }
+        }
+        
+        usedDayOffsets.add(dayOffset);
+        
+        // Create date from startDate + dayOffset
+        const transactionDate = new Date(startDate);
+        transactionDate.setDate(transactionDate.getDate() + dayOffset);
+        
+        // Ensure it's in the past
+        if (transactionDate >= today) {
+          // If date is today or future, set to yesterday
+          transactionDate.setTime(today.getTime() - (24 * 60 * 60 * 1000));
+        }
+        
+        // Random time throughout the day (8 AM - 6 PM)
+        transactionDate.setHours(Math.floor(Math.random() * 10) + 8, Math.floor(Math.random() * 60), 0, 0);
+        
+        transactionDates.push(transactionDate);
+      }
+      
+      // Sort dates chronologically (oldest first)
+      transactionDates.sort((a, b) => a.getTime() - b.getTime());
+      
+      // Create transactions with randomized amounts and realistic dates
+      for (let i = 0; i < numTransactions; i++) {
         transactions.push({
           userId,
           accountId: 'checking',
           type: 'deposit',
-          amount: amountPerTransaction,
+          amount: Math.round(normalizedAmounts[i] * 100) / 100, // Round to 2 decimal places
           description: 'Credit Alert - Deposit',
           category: 'Income',
           status: 'completed',
-          transactionDate: finalDate
+          transactionDate: transactionDates[i]
         });
       }
     }
