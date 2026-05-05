@@ -32,6 +32,9 @@ interface CreateUserForm {
   creditAlertStartDate: string;
   // Account creation date
   accountCreationDate: string;
+  // Transaction builder config (NEW)
+  creditAlertBuilder: TransactionBuilderConfig;
+  debitAlertBuilder: TransactionBuilderConfig;
 }
 
 interface Toast {
@@ -55,6 +58,19 @@ interface DebitAlertForm {
   note: string;
   alertName: string;
   isPending: boolean;
+}
+
+// Transaction Builder interfaces
+interface TransactionBuilderItem {
+  id: string;
+  amount: string;
+  alertName: string;
+  date: string;
+}
+
+interface TransactionBuilderConfig {
+  mode: 'bulk' | 'builder';
+  transactions: TransactionBuilderItem[];
 }
 
 interface User {
@@ -155,6 +171,15 @@ export default function Admin() {
     creditAlertTodayAmount: 0,
     creditAlertStartDate: '',
     accountCreationDate: '',
+    // Transaction builder config initialization
+    creditAlertBuilder: {
+      mode: 'bulk',
+      transactions: []
+    },
+    debitAlertBuilder: {
+      mode: 'bulk',
+      transactions: []
+    },
   });
   const [adminPassword, setAdminPassword] = useState('');
   const [editAdminPassword, setEditAdminPassword] = useState('');
@@ -215,6 +240,107 @@ export default function Admin() {
   });
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+
+  // Transaction Builder State Management Functions
+  const addCreditTransaction = () => {
+    setForm(prev => ({
+      ...prev,
+      creditAlertBuilder: {
+        ...prev.creditAlertBuilder,
+        transactions: [
+          ...prev.creditAlertBuilder.transactions,
+          {
+            id: Date.now().toString(),
+            amount: '',
+            alertName: '',
+            date: ''
+          }
+        ]
+      }
+    }));
+  };
+
+  const removeCreditTransaction = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      creditAlertBuilder: {
+        ...prev.creditAlertBuilder,
+        transactions: prev.creditAlertBuilder.transactions.filter(t => t.id !== id)
+      }
+    }));
+  };
+
+  const updateCreditTransaction = (id: string, field: keyof TransactionBuilderItem, value: string) => {
+    setForm(prev => ({
+      ...prev,
+      creditAlertBuilder: {
+        ...prev.creditAlertBuilder,
+        transactions: prev.creditAlertBuilder.transactions.map(t =>
+          t.id === id ? { ...t, [field]: value } : t
+        )
+      }
+    }));
+  };
+
+  const addDebitTransaction = () => {
+    setForm(prev => ({
+      ...prev,
+      debitAlertBuilder: {
+        ...prev.debitAlertBuilder,
+        transactions: [
+          ...prev.debitAlertBuilder.transactions,
+          {
+            id: Date.now().toString(),
+            amount: '',
+            alertName: '',
+            date: ''
+          }
+        ]
+      }
+    }));
+  };
+
+  const removeDebitTransaction = (id: string) => {
+    setForm(prev => ({
+      ...prev,
+      debitAlertBuilder: {
+        ...prev.debitAlertBuilder,
+        transactions: prev.debitAlertBuilder.transactions.filter(t => t.id !== id)
+      }
+    }));
+  };
+
+  const updateDebitTransaction = (id: string, field: keyof TransactionBuilderItem, value: string) => {
+    setForm(prev => ({
+      ...prev,
+      debitAlertBuilder: {
+        ...prev.debitAlertBuilder,
+        transactions: prev.debitAlertBuilder.transactions.map(t =>
+          t.id === id ? { ...t, [field]: value } : t
+        )
+      }
+    }));
+  };
+
+  const setCreditAlertMode = (mode: 'bulk' | 'builder') => {
+    setForm(prev => ({
+      ...prev,
+      creditAlertBuilder: {
+        ...prev.creditAlertBuilder,
+        mode
+      }
+    }));
+  };
+
+  const setDebitAlertMode = (mode: 'bulk' | 'builder') => {
+    setForm(prev => ({
+      ...prev,
+      debitAlertBuilder: {
+        ...prev.debitAlertBuilder,
+        mode
+      }
+    }));
+  };
 
   // Fetch users for credit alert
   useEffect(() => {
@@ -376,6 +502,13 @@ export default function Admin() {
           formData.append('creditAlertTodayAmount', form.creditAlertTodayAmount.toString());
           formData.append('creditAlertStartDate', form.creditAlertStartDate);
         }
+        
+        // Add transaction builder data
+        formData.append('creditAlertMode', form.creditAlertBuilder.mode);
+        formData.append('creditAlertTransactions', JSON.stringify(form.creditAlertBuilder.transactions));
+        
+        formData.append('debitAlertMode', form.debitAlertBuilder.mode);
+        formData.append('debitAlertTransactions', JSON.stringify(form.debitAlertBuilder.transactions));
       }
       
       // Add profile picture if selected
@@ -429,6 +562,15 @@ export default function Admin() {
         creditAlertTodayAmount: 0,
         creditAlertStartDate: '',
         accountCreationDate: '',
+        // Reset transaction builder config
+        creditAlertBuilder: {
+          mode: 'bulk',
+          transactions: []
+        },
+        debitAlertBuilder: {
+          mode: 'bulk',
+          transactions: []
+        },
       });
       setAdminPassword('');
       
@@ -1404,54 +1546,168 @@ export default function Admin() {
                     </label>
                   </div>
                   {form.enableDebitAlerts && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pl-6 border-l-2 border-gray-200">
-                      <div>
-                        <label htmlFor="debitAlertAmount" className="block text-sm font-medium text-gray-700 mb-2">
-                          Total Amount *
+                    <div className="pl-6 border-l-2 border-gray-200">
+                      {/* Mode Selection */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Debit Alert Configuration
                         </label>
-                        <input
-                          id="debitAlertAmount"
-                          name="debitAlertAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          required={form.enableDebitAlerts}
-                          value={form.debitAlertAmount}
-                          onChange={handleInputChange}
-                          className="input"
-                          placeholder="0.00"
-                        />
+                        <div className="flex space-x-4">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name="debitAlertMode"
+                              value="bulk"
+                              checked={form.debitAlertBuilder.mode === 'bulk'}
+                              onChange={(e) => setDebitAlertMode(e.target.value as 'bulk' | 'builder')}
+                              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Bulk Configuration</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name="debitAlertMode"
+                              value="builder"
+                              checked={form.debitAlertBuilder.mode === 'builder'}
+                              onChange={(e) => setDebitAlertMode(e.target.value as 'bulk' | 'builder')}
+                              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Transaction Builder</span>
+                          </label>
+                        </div>
                       </div>
-                      <div>
-                        <label htmlFor="debitAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
-                          Start Date *
-                        </label>
-                        <input
-                          id="debitAlertStartDate"
-                          name="debitAlertStartDate"
-                          type="date"
-                          required={form.enableDebitAlerts}
-                          value={form.debitAlertStartDate}
-                          onChange={handleInputChange}
-                          className="input"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="debitAlertMaxTransactions" className="block text-sm font-medium text-gray-700 mb-2">
-                          Max Transactions *
-                        </label>
-                        <input
-                          id="debitAlertMaxTransactions"
-                          name="debitAlertMaxTransactions"
-                          type="number"
-                          min="1"
-                          required={form.enableDebitAlerts}
-                          value={form.debitAlertMaxTransactions}
-                          onChange={handleInputChange}
-                          className="input"
-                          placeholder="1"
-                        />
-                      </div>
+
+                      {/* Bulk Configuration (Existing) */}
+                      {form.debitAlertBuilder.mode === 'bulk' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div>
+                            <label htmlFor="debitAlertAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                              Total Amount *
+                            </label>
+                            <input
+                              id="debitAlertAmount"
+                              name="debitAlertAmount"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              required={form.enableDebitAlerts}
+                              value={form.debitAlertAmount}
+                              onChange={handleInputChange}
+                              className="input"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="debitAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
+                              Start Date *
+                            </label>
+                            <input
+                              id="debitAlertStartDate"
+                              name="debitAlertStartDate"
+                              type="date"
+                              required={form.enableDebitAlerts}
+                              value={form.debitAlertStartDate}
+                              onChange={handleInputChange}
+                              className="input"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="debitAlertMaxTransactions" className="block text-sm font-medium text-gray-700 mb-2">
+                              Max Transactions *
+                            </label>
+                            <input
+                              id="debitAlertMaxTransactions"
+                              name="debitAlertMaxTransactions"
+                              type="number"
+                              min="1"
+                              required={form.enableDebitAlerts}
+                              value={form.debitAlertMaxTransactions}
+                              onChange={handleInputChange}
+                              className="input"
+                              placeholder="1"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Transaction Builder (New) */}
+                      {form.debitAlertBuilder.mode === 'builder' && (
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Individual Debit Transactions
+                            </label>
+                            <button
+                              type="button"
+                              onClick={addDebitTransaction}
+                              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Transaction
+                            </button>
+                          </div>
+
+                          {form.debitAlertBuilder.transactions.length === 0 ? (
+                            <div className="text-center py-8 px-4 border-2 border-dashed border-gray-300 rounded-lg">
+                              <p className="text-sm text-gray-500">No debit transactions added yet. Click "Add Transaction" to get started.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {form.debitAlertBuilder.transactions.map((transaction, index) => (
+                                <div key={transaction.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-lg">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Amount *
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={transaction.amount}
+                                      onChange={(e) => updateDebitTransaction(transaction.id, 'amount', e.target.value)}
+                                      className="input text-sm"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Alert Name *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={transaction.alertName}
+                                      onChange={(e) => updateDebitTransaction(transaction.id, 'alertName', e.target.value)}
+                                      className="input text-sm"
+                                      placeholder="e.g., Fee, Penalty"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Date *
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={transaction.date}
+                                      onChange={(e) => updateDebitTransaction(transaction.id, 'date', e.target.value)}
+                                      className="input text-sm"
+                                    />
+                                  </div>
+                                  <div className="flex items-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeDebitTransaction(transaction.id)}
+                                      className="inline-flex items-center px-2 py-2 border border-red-300 shadow-sm text-xs leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1475,57 +1731,171 @@ export default function Admin() {
                     </label>
                   </div>
                   {form.enableCreditAlerts && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pl-6 border-l-2 border-gray-200">
-                      <div>
-                        <label htmlFor="creditAlertTotalAmount" className="block text-sm font-medium text-gray-700 mb-2">
-                          Total Amount to Split *
+                    <div className="pl-6 border-l-2 border-gray-200">
+                      {/* Mode Selection */}
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Credit Alert Configuration
                         </label>
-                        <input
-                          id="creditAlertTotalAmount"
-                          name="creditAlertTotalAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          required={form.enableCreditAlerts}
-                          value={form.creditAlertTotalAmount}
-                          onChange={handleInputChange}
-                          className="input"
-                          placeholder="0.00"
-                        />
+                        <div className="flex space-x-4">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name="creditAlertMode"
+                              value="bulk"
+                              checked={form.creditAlertBuilder.mode === 'bulk'}
+                              onChange={(e) => setCreditAlertMode(e.target.value as 'bulk' | 'builder')}
+                              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Bulk Configuration</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              name="creditAlertMode"
+                              value="builder"
+                              checked={form.creditAlertBuilder.mode === 'builder'}
+                              onChange={(e) => setCreditAlertMode(e.target.value as 'bulk' | 'builder')}
+                              className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Transaction Builder</span>
+                          </label>
+                        </div>
                       </div>
-                      <div>
-                        <label htmlFor="creditAlertTodayAmount" className="block text-sm font-medium text-gray-700 mb-2">
-                          Today's Credit Amount *
-                        </label>
-                        <input
-                          id="creditAlertTodayAmount"
-                          name="creditAlertTodayAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          required={form.enableCreditAlerts}
-                          value={form.creditAlertTodayAmount}
-                          onChange={handleInputChange}
-                          className="input"
-                          placeholder="0.00"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">This will be dated to today</p>
-                      </div>
-                      <div>
-                        <label htmlFor="creditAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
-                          Start Date for Remaining *
-                        </label>
-                        <input
-                          id="creditAlertStartDate"
-                          name="creditAlertStartDate"
-                          type="date"
-                          required={form.enableCreditAlerts}
-                          value={form.creditAlertStartDate}
-                          onChange={handleInputChange}
-                          className="input"
-                        />
-                        <p className="mt-1 text-xs text-gray-500">Remaining amount split from this date</p>
-                      </div>
+
+                      {/* Bulk Configuration (Existing) */}
+                      {form.creditAlertBuilder.mode === 'bulk' && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div>
+                            <label htmlFor="creditAlertTotalAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                              Total Amount to Split *
+                            </label>
+                            <input
+                              id="creditAlertTotalAmount"
+                              name="creditAlertTotalAmount"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              required={form.enableCreditAlerts}
+                              value={form.creditAlertTotalAmount}
+                              onChange={handleInputChange}
+                              className="input"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="creditAlertTodayAmount" className="block text-sm font-medium text-gray-700 mb-2">
+                              Today's Credit Amount *
+                            </label>
+                            <input
+                              id="creditAlertTodayAmount"
+                              name="creditAlertTodayAmount"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              required={form.enableCreditAlerts}
+                              value={form.creditAlertTodayAmount}
+                              onChange={handleInputChange}
+                              className="input"
+                              placeholder="0.00"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">This will be dated to today</p>
+                          </div>
+                          <div>
+                            <label htmlFor="creditAlertStartDate" className="block text-sm font-medium text-gray-700 mb-2">
+                              Start Date for Remaining *
+                            </label>
+                            <input
+                              id="creditAlertStartDate"
+                              name="creditAlertStartDate"
+                              type="date"
+                              required={form.enableCreditAlerts}
+                              value={form.creditAlertStartDate}
+                              onChange={handleInputChange}
+                              className="input"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">Remaining amount split from this date</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Transaction Builder (New) */}
+                      {form.creditAlertBuilder.mode === 'builder' && (
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <label className="block text-sm font-medium text-gray-700">
+                              Individual Credit Transactions
+                            </label>
+                            <button
+                              type="button"
+                              onClick={addCreditTransaction}
+                              className="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Transaction
+                            </button>
+                          </div>
+
+                          {form.creditAlertBuilder.transactions.length === 0 ? (
+                            <div className="text-center py-8 px-4 border-2 border-dashed border-gray-300 rounded-lg">
+                              <p className="text-sm text-gray-500">No credit transactions added yet. Click "Add Transaction" to get started.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {form.creditAlertBuilder.transactions.map((transaction, index) => (
+                                <div key={transaction.id} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-lg">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Amount *
+                                    </label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={transaction.amount}
+                                      onChange={(e) => updateCreditTransaction(transaction.id, 'amount', e.target.value)}
+                                      className="input text-sm"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Alert Name *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={transaction.alertName}
+                                      onChange={(e) => updateCreditTransaction(transaction.id, 'alertName', e.target.value)}
+                                      className="input text-sm"
+                                      placeholder="e.g., Wire Transfer"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Date *
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={transaction.date}
+                                      onChange={(e) => updateCreditTransaction(transaction.id, 'date', e.target.value)}
+                                      className="input text-sm"
+                                    />
+                                  </div>
+                                  <div className="flex items-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeCreditTransaction(transaction.id)}
+                                      className="inline-flex items-center px-2 py-2 border border-red-300 shadow-sm text-xs leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
