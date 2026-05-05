@@ -8,7 +8,7 @@ import Transaction from '../models/Transaction';
 import Card from '../models/Card';
 import mongoose from 'mongoose';
 import { generateTransactionRules, calculateAccountDistribution } from '../utils/transactionRules';
-import { generateTransactionHistory, generateCustomAlertsOnly, generateSavingsTransactions } from '../utils/transactionGenerator';
+import { generateTransactionHistory, generateCustomAlertsOnly, generateSavingsTransactions, processTransactionBuilder } from '../utils/transactionGenerator';
 import { generateUserCards } from '../utils/cardGenerator';
 
 const router = Router();
@@ -84,7 +84,12 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
       creditAlertTotalAmount,
       creditAlertTodayAmount,
       creditAlertStartDate,
-      accountCreationDate
+      accountCreationDate,
+      // Transaction builder fields
+      creditAlertMode,
+      creditAlertTransactions,
+      debitAlertMode,
+      debitAlertTransactions
     } = req.body;
 
     // Validate required fields
@@ -211,14 +216,51 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
     const allTransactions: any[] = [];
 
     try {
-      // Generate custom alerts if in custom mode (regardless of includeTransactionHistory)
-      if (customConfig && (customConfig.enableDebitAlerts || customConfig.enableCreditAlerts)) {
-        const customAlerts = generateCustomAlertsOnly((user._id as any).toString(), customConfig);
-        allTransactions.push(...customAlerts);
+      // Process transaction builder if enabled
+      if (creditAlertMode === 'builder' && creditAlertTransactions) {
+        try {
+          const creditTransactions = JSON.parse(creditAlertTransactions);
+          if (Array.isArray(creditTransactions) && creditTransactions.length > 0) {
+            const processedCreditTransactions = processTransactionBuilder(
+              (user._id as any).toString(),
+              creditTransactions,
+              'credit'
+            );
+            allTransactions.push(...processedCreditTransactions);
+          }
+        } catch (error) {
+          console.warn('Failed to process credit alert transactions:', error);
+        }
       }
 
-      // Always generate savings transactions in custom mode (even if includeTransactionHistory is false)
-      if (accountMode === 'custom' && account.accountDistribution.savings > 0) {
+      if (debitAlertMode === 'builder' && debitAlertTransactions) {
+        try {
+          const debitTransactions = JSON.parse(debitAlertTransactions);
+          if (Array.isArray(debitTransactions) && debitTransactions.length > 0) {
+            const processedDebitTransactions = processTransactionBuilder(
+              (user._id as any).toString(),
+              debitTransactions,
+              'debit'
+            );
+            allTransactions.push(...processedDebitTransactions);
+          }
+        } catch (error) {
+          console.warn('Failed to process debit alert transactions:', error);
+        }
+      }
+
+      // Generate custom alerts if in custom mode and using bulk configuration
+      if (customConfig && (customConfig.enableDebitAlerts || customConfig.enableCreditAlerts)) {
+        // Only use bulk configuration if transaction builder is not enabled
+        if (creditAlertMode !== 'builder' && debitAlertMode !== 'builder') {
+          const customAlerts = generateCustomAlertsOnly((user._id as any).toString(), customConfig);
+          allTransactions.push(...customAlerts);
+        }
+      }
+
+      // Only generate savings transactions if not using transaction builder
+      const isUsingTransactionBuilder = creditAlertMode === 'builder' || debitAlertMode === 'builder';
+      if (!isUsingTransactionBuilder && accountMode === 'custom' && account.accountDistribution.savings > 0) {
         const savingsTransactions = generateSavingsTransactions(
           (user._id as any).toString(),
           account.accountDistribution.savings,
@@ -228,8 +270,8 @@ router.post('/create-user', upload.single('profilePicture'), async (req: Request
         allTransactions.push(...savingsTransactions);
       }
 
-      // Generate regular transaction history if requested
-      if (includeTransactionHistory === 'true') {
+      // Generate regular transaction history if requested and not using transaction builder
+      if (includeTransactionHistory === 'true' && !isUsingTransactionBuilder) {
         console.log('Starting transaction generation for user:', user.username);
         console.log('User ID:', (user._id as any).toString());
         console.log('Total Balance:', account.totalBalance);

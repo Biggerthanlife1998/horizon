@@ -602,6 +602,56 @@ export const generateSavingsTransactions = (
   return transactions;
 };
 
+// Transaction Builder interfaces
+interface TransactionBuilderItem {
+  id: string;
+  amount: string;
+  alertName: string;
+  date: string;
+}
+
+export const processTransactionBuilder = (
+  userId: string,
+  transactions: TransactionBuilderItem[],
+  transactionType: 'credit' | 'debit'
+): GeneratedTransaction[] => {
+  const processedTransactions: GeneratedTransaction[] = [];
+  
+  for (const transaction of transactions) {
+    // Validate required fields
+    if (!transaction.amount || !transaction.alertName || !transaction.date) {
+      console.warn(`Skipping invalid transaction: ${JSON.stringify(transaction)}`);
+      continue;
+    }
+    
+    const amount = parseFloat(transaction.amount);
+    if (isNaN(amount) || amount <= 0) {
+      console.warn(`Skipping transaction with invalid amount: ${transaction.amount}`);
+      continue;
+    }
+    
+    const transactionDate = new Date(transaction.date);
+    if (isNaN(transactionDate.getTime())) {
+      console.warn(`Skipping transaction with invalid date: ${transaction.date}`);
+      continue;
+    }
+    
+    processedTransactions.push({
+      userId,
+      accountId: 'checking', // Default to checking account for builder transactions
+      type: transactionType === 'credit' ? 'deposit' : 'withdrawal',
+      amount: transactionType === 'credit' ? amount : -amount,
+      description: transaction.alertName,
+      category: transactionType === 'credit' ? 'Credit Alert' : 'Debit Alert',
+      status: 'completed' as const,
+      transactionDate
+    });
+  }
+  
+  // Sort by date (oldest first)
+  return processedTransactions.sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
+};
+
 export const generateCustomAlertsOnly = (
   userId: string,
   customConfig: CustomTransactionConfig
